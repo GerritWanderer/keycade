@@ -4,13 +4,13 @@ import Quickshell.Wayland
 import Quickshell.Wayland._ShortcutsInhibitor
 import "../lib"
 import "../lib/InputNormalizer.js" as Normalizer
+import "../lib/TextKey.js" as TextKey
 
 ShellRoot {
   id: shellRoot
 
   property string eventKey: "—"
   property string eventText: "—"
-  property int scanCode: 0
   property int qtModifiers: 0
   property int normalizedModifiers: 0
   property string normalizedKey: "—"
@@ -39,14 +39,13 @@ ShellRoot {
       Keys.priority: Keys.BeforeItem
 
       Keys.onPressed: function(event) {
-        var input = Normalizer.normalizeEvent(event)
+        var input = TextKey.normalizeEvent(event)
         shellRoot.eventKey = "0x" + Number(event.key).toString(16).toUpperCase()
         shellRoot.eventText = event.text || "—"
-        shellRoot.scanCode = Number(event.nativeScanCode || 0)
         shellRoot.qtModifiers = Number(event.modifiers || 0)
-        shellRoot.normalizedModifiers = input.modMask
-        shellRoot.normalizedKey = input.logicalKey
-        shellRoot.heldModifiers = input.modMask
+        shellRoot.normalizedModifiers = input.mods
+        shellRoot.normalizedKey = TextKey.inputLabels(input).join(" + ")
+        shellRoot.heldModifiers = Normalizer.modifierMask(event.modifiers)
         event.accepted = true
       }
       Keys.onReleased: function(event) {
@@ -75,12 +74,11 @@ ShellRoot {
         Rectangle { width: parent.width; height: 3; color: "#3d59a1" }
         SafeText { text: "event.key          " + shellRoot.eventKey; color: "#f1f4ff"; font.family: "monospace"; font.pixelSize: 16 }
         SafeText { text: "event.text         " + shellRoot.eventText; color: "#f1f4ff"; font.family: "monospace"; font.pixelSize: 16 }
-        SafeText { text: "nativeScanCode     " + shellRoot.scanCode; color: "#f1f4ff"; font.family: "monospace"; font.pixelSize: 16 }
         SafeText { text: "event.modifiers    " + shellRoot.qtModifiers; color: "#f1f4ff"; font.family: "monospace"; font.pixelSize: 16 }
         SafeText { text: "normalized         mask=" + shellRoot.normalizedModifiers + " key=" + shellRoot.normalizedKey; color: "#e0af68"; font.family: "monospace"; font.pixelSize: 16; font.bold: true }
         SafeText { text: "held modifiers     " + shellRoot.heldModifiers; color: "#bb9af7"; font.family: "monospace"; font.pixelSize: 16 }
         Item { width: 1; height: 8 }
-        SafeText { text: "Press chords to inspect · release Esc to exit"; color: "#9aa5d1"; font.pixelSize: 14 }
+        SafeText { text: "Press text steps to inspect · release Esc to exit"; color: "#9aa5d1"; font.pixelSize: 14 }
       }
     }
   }

@@ -862,10 +862,9 @@ Item {
   function handleGameInput(event) {
     if (root.view !== "playing" || root.cardLocked || !root.currentBinding) return
     if (root.inputSilentUntil > 0 && Date.now() < root.inputSilentUntil) return
-    var input = Normalizer.normalizeEvent(event)
-    if (input.autoRepeat || Normalizer.isModifier(input.logicalKey)) return
+    if (event.isAutoRepeat || Normalizer.isModifier(event.key)) return
     var state = root.answerState
-    var verdict = AnswerMatcher.advance(state, root.currentAnswer, event, {})
+    var verdict = AnswerMatcher.advance(state, root.currentAnswer, event)
     root.answerState = state
     root.answerStep = AnswerMatcher.typedSteps(state)
     // A step landed and more remain: the card's own deadline keeps running,

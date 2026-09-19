@@ -172,8 +172,9 @@ import json, sys
 from pathlib import Path
 settings = json.loads(Path(sys.argv[1]).read_text("utf-8"))
 assert settings["excludedBindings"] == ["tmux:prefix/x"], settings
-# This package does not migrate or delete old state.
-assert settings["activeProfile"] == "tmux", settings
+# Registry pruning falls back to the only reachable supply for this selector.
+# It is a preference, not history: the foreign exclusion above stays verbatim.
+assert settings["activeProfile"] == "lazyvim", settings
 PY
 
 printf 'single-supply ground-loading QML integration test passed\n'

@@ -11,7 +11,6 @@ import "../../lib/Stats.js" as Stats
 import "../../lib/Session.js" as Session
 import "../../lib/DotFont.js" as DotFont
 import "../../lib/Palettes.js" as Palettes
-import "../fixtures/canonical-keys.js" as CanonicalKeys
 import "../fixtures/text-keys.js" as TextKeys
 import "../../lib/sources/pack/Eligibility.js" as PackEligibility
 import "../../lib/Packs.js" as Packs
@@ -48,105 +47,21 @@ TestCase {
     return base
   }
 
-  function test_logicalAndPhysicalMatching() {
-    verify(Normalizer.matches(binding({}), { modMask: 64, logicalKey: "3", physicalCode: 12 }))
-    verify(!Normalizer.matches(binding({}), { modMask: 65, logicalKey: "3", physicalCode: 12 }))
-    verify(Normalizer.matches(binding({ key: "", keycode: 12, matchMode: "physical" }),
-                              { modMask: 64, logicalKey: "4", physicalCode: 12 }))
-  }
-
-  // A German QWERTZ layout: the key that types "," unshifted types ";" with
-  // Shift, which is what Qt reports and what the old matcher compared.
-  function germanMap() {
-    var map = Object.create(null)
-    map[","] = [59]
-    map["-"] = [20]
-    return map
-  }
-
-  // The keycode map is indexed by the producer's canonical_key() and looked
-  // up with canonicalKey() here. Two implementations of one normalisation
-  // drift, and a drift costs the binding rather than merely displaying it
-  // oddly, so the same corpus holds both sides.
-  function test_canonicalKeyAgreesWithTheProducerCorpus() {
-    var pairs = CanonicalKeys.pairs
-    verify(pairs.length > 20)
-    for (var i = 0; i < pairs.length; i++) {
-      var canonical = pairs[i][1]
-      // The producer's output reaches QML as binding.key and is canonicalised
-      // again on the way to the lookup, so it has to survive that unchanged.
-      compare(Normalizer.canonicalKey(canonical), canonical,
-              "producer output " + JSON.stringify(canonical) + " is not stable here")
-    }
-  }
-
-  function test_lowerCaseLetterBindingsResolveToTheSameKey() {
-    compare(Normalizer.canonicalKey("q"), "Q")
-    var map = Object.create(null)
-    map["Q"] = [24]
-    var lower = binding({ key: "Q", description: "Close window" })
-    verify(Normalizer.matches(lower, { modMask: 64, logicalKey: "Q", physicalCode: 24 },
-                              { keycodeMap: map }))
-  }
-
-  function test_keymapJudgesByKeycodeNotByProducedCharacter() {
-    var comma = binding({ modMask: 65, key: ",", description: "Dismiss all notifications" })
-    var pressed = { modMask: 65, logicalKey: ";", physicalCode: 59 }
-    // What issue #1 reported: correct key, judged wrong.
-    verify(!Normalizer.matches(comma, pressed))
-    verify(Normalizer.matches(comma, pressed, { keycodeMap: germanMap() }))
-  }
-
-  function test_keymapRejectsAnotherKeyOnTheSameCharacter() {
-    var comma = binding({ modMask: 65, key: ",", description: "Dismiss all notifications" })
-    verify(!Normalizer.matches(comma, { modMask: 65, logicalKey: ",", physicalCode: 94 },
-                               { keycodeMap: germanMap() }))
-  }
-
-  function test_keymapSeparatesTheKeypadFromTheMainRow() {
-    // kc82 is KP_Subtract and kc20 is minus, but Qt reports Key_Minus for both.
-    var minus = binding({ key: "-", description: "Shrink window" })
-    var keypad = { modMask: 64, logicalKey: "-", physicalCode: 82 }
-    verify(Normalizer.matches(minus, keypad))
-    verify(!Normalizer.matches(minus, keypad, { keycodeMap: germanMap() }))
-    verify(Normalizer.matches(minus, { modMask: 64, logicalKey: "-", physicalCode: 20 },
-                              { keycodeMap: germanMap() }))
-  }
-
-  function test_keyAbsentFromTheKeymapMatchesNothing() {
-    // No base-level key produces slash on this layout, so Hyprland would not
-    // fire the bind either.
-    var slash = binding({ modMask: 65, key: "/", description: "Passwords" })
-    verify(Normalizer.matches(slash, { modMask: 65, logicalKey: "/", physicalCode: 15 }))
-    verify(!Normalizer.matches(slash, { modMask: 65, logicalKey: "/", physicalCode: 15 },
-                               { keycodeMap: germanMap() }))
-  }
-
-  function test_eventWithoutAKeycodeStillFallsBackToTheCharacter() {
-    var comma = binding({ key: "," })
-    verify(Normalizer.matches(comma, { modMask: 64, logicalKey: ",", physicalCode: 0 },
-                              { keycodeMap: germanMap() }))
-  }
-
-  function test_keymapNeverOverridesTheModifierComparison() {
-    var comma = binding({ modMask: 65, key: "," })
-    verify(!Normalizer.matches(comma, { modMask: 64, logicalKey: ";", physicalCode: 59 },
-                               { keycodeMap: germanMap() }))
-  }
-
-  // The one-way union still lives in the normaliser, but no eligible binding
-  // reaches it any more: DELETE is a device-special key, so a DELETE bind is
-  // rejected before it can ever become a card. The assertions stay to pin the
-  // normaliser's own contract until the union itself is removed.
-  function test_appleDeleteAcceptsBackspaceOneWay() {
-    var deleteBinding = binding({ key: "DELETE", description: "Close all windows" })
-    var backspaceInput = { modMask: 64, logicalKey: "BACKSPACE", physicalCode: 22 }
-    verify(!Normalizer.matches(deleteBinding, backspaceInput))
-    verify(Normalizer.matches(deleteBinding, backspaceInput, { appleKeyboard: true }))
-
-    var backspaceBinding = binding({ key: "BACKSPACE", description: "Toggle window transparency" })
-    var deleteInput = { modMask: 64, logicalKey: "DELETE", physicalCode: 119 }
-    verify(!Normalizer.matches(backspaceBinding, deleteInput, { appleKeyboard: true }))
+  function test_inputFilterKeepsModifiersSeparateFromTextJudging() {
+    compare(Normalizer.modifierMask(0), 0)
+    compare(Normalizer.modifierMask(qtShift), 1)
+    compare(Normalizer.modifierMask(qtCtrl), 4)
+    compare(Normalizer.modifierMask(qtAlt), 8)
+    compare(Normalizer.modifierMask(qtSuper), 64)
+    compare(Normalizer.modifierMask(qtShift | qtCtrl | qtAlt | qtSuper), 77)
+    compare(Normalizer.modifierMask(0x20000000), 0) // Keypad is not a held modifier.
+    for (var key = 0x01000020; key <= 0x01000023; key++)
+      verify(Normalizer.isModifier(key))
+    verify(!Normalizer.isModifier(Qt.Key_Escape))
+    verify(!Normalizer.isModifier(Qt.Key_G))
+    verify(!Normalizer.isModifier(Qt.Key_Space))
+    verify(!Normalizer.isModifier(0))
+    verify(!Normalizer.isModifier(undefined))
   }
 
   function test_excludedListIsBoundedOnBothAxes() {
@@ -188,6 +103,25 @@ TestCase {
     compare(Session.withoutExclusion(list, "hyprland", "64|K|workspace|1").length, 0)
     compare(Session.withoutExclusion(list, "hyprland", "64|K|missing|1").length, 1)
     compare(Session.withoutExclusion(list, "lazyvim", "64|K|workspace|1").length, 1)
+  }
+
+  function test_foreignExclusionsRemainRetainedAndInert() {
+    var foreign = ["hyprland", "herdr", "tmux", "vim", "neovim", "future-supply"]
+    var values = ["lazyvim:normal/<leader>ff"]
+    for (var index = 0; index < foreign.length; index++)
+      values.push(foreign[index] + ":normal/a:b/c")
+    compare(JSON.stringify(Session.excludedList(values)), JSON.stringify(values))
+    var active = Session.excludedSet(values, Profiles.defaultId())
+    compare(Object.getPrototypeOf(active), null)
+    compare(Object.keys(active).join(","), "normal/<leader>ff")
+    // Curation of a current exclusion never clears another namespace.
+    var removed = Session.withoutExclusion(values, "lazyvim", "normal/<leader>ff")
+    compare(JSON.stringify(removed), JSON.stringify(values.slice(1)))
+    var restored = Session.withExclusion(removed, "lazyvim", "normal/<leader>ff")
+    compare(restored.length, values.length)
+    for (var second = 0; second < foreign.length; second++)
+      verify(Session.excludedSet(restored, foreign[second])["normal/a:b/c"])
+    compare(Session.excludedList(["constructor:x", "prototype:x", "__proto__:x"]).length, 0)
   }
 
   // The HUD draws these cells itself, so a row wider than five bits or a
@@ -237,133 +171,6 @@ TestCase {
     verify(Palettes.supported(Palettes.defaultName()))
     compare(Palettes.palette("no-such-theme"), Palettes.palette(Palettes.defaultName()))
     compare(Palettes.palette("__proto__"), Palettes.palette(Palettes.defaultName()))
-  }
-
-  function test_tabAndBacktabNormalization() {
-    var tab = Normalizer.normalizeEvent({
-      key: 0x01000001,
-      text: "\t",
-      modifiers: 0x08000000,
-      nativeScanCode: 23,
-      isAutoRepeat: false
-    })
-    compare(tab.logicalKey, "TAB")
-    compare(tab.modMask, 8)
-    verify(Normalizer.matches(binding({
-      modMask: 8,
-      key: "TAB",
-      dispatcher: "movefocus",
-      arg: "next",
-      description: "Focus on next window"
-    }), tab))
-
-    var backtab = Normalizer.normalizeEvent({
-      key: 0x01000002,
-      text: "",
-      modifiers: 0x0a000000,
-      nativeScanCode: 23,
-      isAutoRepeat: false
-    })
-    compare(backtab.logicalKey, "TAB")
-    compare(backtab.modMask, 9)
-    verify(Normalizer.matches(binding({
-      modMask: 9,
-      key: "TAB",
-      dispatcher: "movefocus",
-      arg: "previous",
-      description: "Focus on previous window"
-    }), backtab))
-
-    var macbookUnknownTab = Normalizer.normalizeEvent({
-      key: 0x01ffffff,
-      text: "\t",
-      modifiers: 0x10000000,
-      nativeScanCode: 23,
-      isAutoRepeat: false
-    })
-    compare(macbookUnknownTab.logicalKey, "TAB")
-    compare(macbookUnknownTab.modMask, 64)
-    verify(Normalizer.matches(binding({
-      modMask: 64,
-      key: "TAB",
-      dispatcher: "workspace",
-      arg: "m+1",
-      description: "Next workspace"
-    }), macbookUnknownTab))
-
-    var macbookUnknownBacktab = Normalizer.normalizeEvent({
-      key: 0x01ffffff,
-      text: "",
-      modifiers: 0x12000000,
-      nativeScanCode: 23,
-      isAutoRepeat: false
-    })
-    compare(macbookUnknownBacktab.logicalKey, "TAB")
-    compare(macbookUnknownBacktab.modMask, 65)
-    verify(Normalizer.matches(binding({
-      modMask: 65,
-      key: "TAB",
-      dispatcher: "workspace",
-      arg: "m-1",
-      description: "Previous workspace"
-    }), macbookUnknownBacktab))
-
-    compare(Normalizer.logicalKey({
-      key: 0,
-      text: "",
-      nativeScanCode: 15
-    }), "TAB")
-  }
-
-  function test_specialKeyNormalization() {
-    compare(Normalizer.logicalKey({ key: 0x01000003 }), "BACKSPACE")
-    compare(Normalizer.logicalKey({ key: 0x01000007 }), "DELETE")
-    compare(Normalizer.logicalKey({ key: 0x0100003b }), "F12")
-    compare(Normalizer.logicalKey({ key: 0x01000072 }), "XF86AUDIORAISEVOLUME")
-    compare(Normalizer.logicalKey({ key: 0x010000b3 }), "XF86MONBRIGHTNESSDOWN")
-  }
-
-  function test_shiftedSymbolsNormalizeToBaseKeys() {
-    var slash = Normalizer.normalizeEvent({
-      key: 0x3f,
-      text: "?",
-      modifiers: 0x12000000,
-      nativeScanCode: 61,
-      isAutoRepeat: false
-    })
-    compare(slash.logicalKey, "/")
-    compare(slash.modMask, 65)
-    verify(Normalizer.matches(binding({
-      modMask: 65,
-      key: "/",
-      dispatcher: "exec",
-      arg: "passwords",
-      description: "Passwords"
-    }), slash))
-
-    compare(Normalizer.logicalKey({ key: 0x2b, text: "+", modifiers: 0x02000000 }), "=")
-    compare(Normalizer.logicalKey({ key: 0x3a, text: ":", modifiers: 0x02000000 }), ";")
-    compare(Normalizer.logicalKey({ key: 0x3f, text: "?", modifiers: 0 }), "?")
-  }
-
-  function test_spaceNormalization() {
-    var space = Normalizer.normalizeEvent({
-      key: 0x20,
-      text: " ",
-      modifiers: 0x14000000,
-      nativeScanCode: 65,
-      isAutoRepeat: false
-    })
-    compare(space.logicalKey, "SPACE")
-    compare(space.modMask, 68)
-    compare(Normalizer.canonicalKey(" "), "SPACE")
-    verify(Normalizer.matches(binding({
-      modMask: 68,
-      key: "SPACE",
-      dispatcher: "exec",
-      arg: "background-switcher",
-      description: "Background switcher"
-    }), space))
   }
 
   function test_guidedInputDoesNotAffectFirstTryWindow() {
@@ -510,15 +317,32 @@ TestCase {
     compare(Profiles.qualifyLegacy("hyprland/64|K|exec|x"), "hyprland/64|K|exec|x")
     compare(Profiles.qualify("Hyprland", "x"), "")
     compare(Profiles.qualify("__proto__", "x"), "")
-    verify(Profiles.known("hyprland"))
+    compare(Profiles.qualify("constructor", "x"), "")
+    compare(Profiles.qualify("prototype", "x"), "")
+    // Retired and not-yet-known namespaces are syntactically valid history,
+    // not registered supplies. D10 must never depend on known().
+    var foreign = ["hyprland", "herdr", "tmux", "vim", "neovim", "lazygit"]
+    for (var index = 0; index < foreign.length; index++) {
+      var id = foreign[index]
+      verify(Profiles.valid(id))
+      verify(!Profiles.known(id))
+      verify(!Profiles.isPack(id))
+      compare(Profiles.qualify(id, "normal/a/b"), id + "/normal/a/b")
+      compare(Profiles.profileOf(id + "/normal/a/b"), id)
+      compare(Profiles.localOf(id + "/normal/a/b"), "normal/a/b")
+      compare(Profiles.qualifyLegacy(id + "/normal/a/b"), id + "/normal/a/b")
+    }
+  }
+
+  function test_lazyvimIsTheOnlySupplyAndDefault() {
+    compare(Profiles.ids().join(","), "lazyvim")
+    compare(Profiles.defaultId(), "lazyvim")
     verify(Profiles.known("lazyvim"))
-    verify(Profiles.known("tmux"))
-    verify(!Profiles.known("lazygit"))
-    // A ground either reads the machine or carries a table; the two take
-    // different sources and judge answers differently.
-    verify(!Profiles.isPack("hyprland"))
     verify(Profiles.isPack("lazyvim"))
-    verify(Profiles.isPack("tmux"))
+    compare(Profiles.profile("lazyvim").judgeMode, "text")
+    compare(Profiles.profile("lazyvim").answerModel, "sequence")
+    compare(Profiles.contexts("lazyvim").join(","), "normal,visual,insert,operator")
+    compare(Profiles.optionNames("lazyvim").join(","), "leader,localleader")
   }
 
   function test_v1StatsMigrateWithoutInventingMastery() {
@@ -552,6 +376,8 @@ TestCase {
     compare(migrated.bindings["hyprland/one"].firstTryCorrect, 1)
     compare(migrated.bindings["hyprland/one"].successfulRuns.length, 0)
     compare(migrated.bindings.one, undefined)
+    compare(migrated.bindings["lazyvim/one"], undefined)
+    compare(migrated.profiles.lazyvim, undefined)
   }
 
   function test_v2StatsPreserveProgressAndGainMilestoneDefaults() {
@@ -578,6 +404,8 @@ TestCase {
     compare(counters.coverageCursor, 8)
     compare(migrated.bindings["hyprland/one"].state, "mastered")
     compare(migrated.bindings["hyprland/one"].firstTryCorrect, 5)
+    compare(migrated.bindings["lazyvim/one"], undefined)
+    compare(migrated.profiles.lazyvim, undefined)
     compare(counters.totalTrainingMs, 0)
     compare(counters.firstMasteryAt, 0)
     compare(counters.firstMasteryRun, 0)
@@ -634,6 +462,8 @@ TestCase {
     compare(Stats.counters(again, "hyprland").runs, 12)
     compare(again.bindings["hyprland/" + localId].firstTryCorrect, 5)
     compare(again.bindings["hyprland/hyprland/" + localId], undefined)
+    compare(again.bindings["lazyvim/" + localId], undefined)
+    compare(again.profiles.lazyvim, undefined)
   }
 
   // The longest id a source can mint still migrates: the local part is bounded
@@ -696,6 +526,39 @@ TestCase {
     compare(Stats.counters(older, "tmux").knownTotal, 0)
   }
 
+  function test_foreignHistorySurvivesWithoutContributingToLazyvim() {
+    var foreign = ["hyprland", "herdr", "tmux", "vim", "neovim", "future-supply"]
+    var source = Stats.defaults()
+    for (var index = 0; index < foreign.length; index++) {
+      var name = foreign[index]
+      var id = name + "/normal/a:b/c"
+      Stats.recordGuided(source, id, 1, 100)
+      Stats.recordFirstTry(source, id, true, 500, 1, 200)
+      Stats.completeRun(source, name)
+    }
+    var before = JSON.stringify(source)
+    var migrated = Stats.parse(before)
+    compare(JSON.stringify(migrated), before)
+    compare(Object.getPrototypeOf(migrated.bindings), null)
+    compare(Object.getPrototypeOf(migrated.profiles), null)
+    compare(Stats.runsOf(migrated, "lazyvim"), 0)
+    var active = [{ id: "lazyvim/normal/a:b/c" }]
+    compare(Stats.aggregate(migrated, active).attempts, 0)
+    compare(Stats.counts(migrated, active, 300, 1).mastered, 0)
+    for (var second = 0; second < foreign.length; second++) {
+      var savedId = foreign[second] + "/normal/a:b/c"
+      compare(JSON.stringify(migrated.bindings[savedId]), JSON.stringify(source.bindings[savedId]))
+      var session = Session.sanitize({ schemaVersion: 1, profileId: foreign[second], runId: 1,
+        currentBindingId: savedId, cards: [{ bindingId: savedId, tier: "learning", queue: "due" }],
+        pendingReinforcements: [savedId], runResults: {} })
+      compare(session.profileId, foreign[second])
+      compare(session.currentBindingId, savedId)
+      compare(session.cards[0].bindingId, savedId)
+      compare(session.pendingReinforcements[0], savedId)
+      verify(!Session.canResume(session, 1, active, 24, "lazyvim"))
+    }
+  }
+
   function test_v4StatsDropEntriesWithNoTrainingGround() {
     var migrated = Stats.migrate({
       schemaVersion: 4,
@@ -724,7 +587,7 @@ TestCase {
     var bindings = []
     for (var index = 0; index < 8; index++) {
       var item = binding({ key: String(index), arg: String(index), description: "Switch to workspace " + index })
-      item.id = Profiles.qualify("hyprland", Normalizer.bindingId(item))
+      item.id = Profiles.qualify("lazyvim", "scheduler/" + index)
       bindings.push(item)
     }
     var deck = Scheduler.build(bindings, Stats.defaults(), 24)
@@ -747,7 +610,7 @@ TestCase {
           description: categories[categoryIndex] + " " + itemIndex
         })
         item.category = categories[categoryIndex]
-        item.id = Profiles.qualify("hyprland", Normalizer.bindingId(item))
+        item.id = Profiles.qualify("lazyvim", "scheduler/" + categoryIndex + "/" + itemIndex)
         bindings.push(item)
       }
     }
@@ -944,12 +807,15 @@ TestCase {
       pendingReinforcements: ["first"],
       runResults: { "first": { misses: 2, reactions: [800] } }
     })
+    compare(Profiles.defaultId(), "lazyvim")
     compare(sanitized.profileId, "hyprland")
     compare(sanitized.cards[0].bindingId, "hyprland/first")
     compare(sanitized.currentBindingId, "hyprland/first")
     compare(sanitized.pendingReinforcements[0], "hyprland/first")
     compare(sanitized.runResults["hyprland/first"].misses, 2)
     verify(Session.canResume(sanitized, 4, [first], 24, "hyprland"))
+    verify(!Session.canResume(sanitized, 4, [first], 24, "lazyvim"))
+    compare(sanitized.runResults["lazyvim/first"], undefined)
 
     // Sanitising twice must not prefix twice.
     var again = Session.sanitize(sanitized)
@@ -1020,8 +886,8 @@ TestCase {
     var state = AnswerMatcher.begin()
     var verdict = ""
     for (var index = 0; index < steps.length; index++)
-      verdict = AnswerMatcher.advance(state, answer, textEvent(steps[index]), {})
-    return { verdict: verdict, cursor: state.cursor }
+      verdict = AnswerMatcher.advance(state, answer, textEvent(steps[index]))
+    return { verdict: verdict, cursor: AnswerMatcher.typedSteps(state) }
   }
 
   // The producer writes these steps into a pack; the consumer judges presses
@@ -1105,11 +971,11 @@ TestCase {
     var steps = [{ mods: 0, text: "g" }, { mods: 0, text: "c" }, { mods: 0, text: "c" }]
     var answer = textAnswer(steps)
     var state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, answer, textEvent(steps[0]), {}), "progress")
+    compare(AnswerMatcher.advance(state, answer, textEvent(steps[0])), "progress")
     compare(AnswerMatcher.typedSteps(state), 1)
-    compare(AnswerMatcher.advance(state, answer, textEvent(steps[1]), {}), "progress")
+    compare(AnswerMatcher.advance(state, answer, textEvent(steps[1])), "progress")
     compare(AnswerMatcher.typedSteps(state), 2)
-    compare(AnswerMatcher.advance(state, answer, textEvent(steps[2]), {}), "hit")
+    compare(AnswerMatcher.advance(state, answer, textEvent(steps[2])), "hit")
     compare(AnswerMatcher.typedSteps(state), 0)
   }
 
@@ -1118,13 +984,13 @@ TestCase {
   function test_aWrongStepFailsTheWholeCard() {
     var answer = textAnswer([{ mods: 0, text: "g" }, { mods: 0, text: "c" }])
     var state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "g" }), {}), "progress")
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "x" }), {}), "miss")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "g" })), "progress")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "x" })), "miss")
     compare(AnswerMatcher.typedSteps(state), 0)
     // And the retype starts over rather than resuming mid-sequence.
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "c" }), {}), "miss")
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "g" }), {}), "progress")
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "c" }), {}), "hit")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "c" })), "miss")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "g" })), "progress")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "c" })), "hit")
   }
 
   // The card asked for `gc`; `gc` answers it. Waiting to see whether a third
@@ -1132,30 +998,70 @@ TestCase {
   function test_aCompletedSequenceAnswersWithoutWaitingForALongerOne() {
     var answer = textAnswer([{ mods: 0, text: "g" }, { mods: 0, text: "c" }])
     var state = AnswerMatcher.begin()
-    AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "g" }), {})
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "c" }), {}), "hit")
+    AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "g" }))
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "c" })), "hit")
     // Which is exactly why the card that follows has to be deaf for a moment.
     verify(AnswerMatcher.overruns(answer))
     verify(!AnswerMatcher.overruns(textAnswer([{ mods: 0, text: "g" }])))
   }
 
-  // The Hyprland ground goes down this same path, and must judge as it did.
-  function test_aChordIsTheLengthOneCaseAndJudgesAsBefore() {
-    var item = binding({ key: "3", arg: "3", description: "Switch to workspace 3" })
-    var answer = AnswerMatcher.chordAnswer(item)
-    compare(AnswerMatcher.stepCount(answer), 1)
-    compare(AnswerMatcher.judgeMode(answer), "keysym")
-    verify(!AnswerMatcher.overruns(answer))
-    compare(AnswerMatcher.stepLabels(answer)[0].join(" + "), Normalizer.display(item))
+  function test_unsupportedJudgesFailClosedEvenWithTextShapedSteps() {
+    var modes = ["keysym", "physical", "logical", "unknown", "TEXT", "", null, undefined]
+    var step = { mods: 0, text: "g" }
+    var event = textEvent(step)
+    event.nativeScanCode = 42
+    for (var index = 0; index < modes.length; index++) {
+      var answer = { judgeMode: modes[index], steps: [step], alternates: [[step]] }
+      var state = { cursors: [1] }
+      compare(AnswerMatcher.judgeMode(answer), "")
+      compare(AnswerMatcher.normalizeInput(answer, event), null)
+      verify(!AnswerMatcher.stepMatches(answer, step, TextKey.normalizeEvent(event)))
+      compare(AnswerMatcher.advance(state, answer, event), "miss")
+      compare(AnswerMatcher.typedSteps(state), 0)
+      compare(AnswerMatcher.stepCount(answer), 0)
+      compare(AnswerMatcher.stepLabels(answer).length, 0)
+      compare(AnswerMatcher.alternateLabels(answer).length, 0)
+      compare(AnswerMatcher.inputDisplay(answer, event), "")
+      verify(!AnswerMatcher.overruns(answer))
+    }
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(), null, event), "miss")
+    // Old chord records cannot be revived just by labelling them text.
+    var retired = { modMask: 0, key: "G", keycode: 42, matchMode: "physical" }
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(), textAnswer([retired]), event), "miss")
+  }
 
-    var hit = { key: 0x33, text: "3", modifiers: qtSuper, isAutoRepeat: false }
-    var wrong = { key: 0x34, text: "4", modifiers: qtSuper, isAutoRepeat: false }
-    var state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, answer, hit, {}), "hit")
-    compare(AnswerMatcher.advance(state, answer, wrong, {}), "miss")
-    // Byte for byte the old verdict, reached the new way.
-    verify(Normalizer.matches(item, Normalizer.normalizeEvent(hit), {}))
-    verify(!Normalizer.matches(item, Normalizer.normalizeEvent(wrong), {}))
+  function test_textJudgingNeverReadsPhysicalCodesOrTranslatesSymbols() {
+    var event = { key: Qt.Key_Question, text: "?", modifiers: qtShift }
+    Object.defineProperty(event, "nativeScanCode", {
+      get: function() { throw new Error("physical input path was accessed") }
+    })
+    var question = textAnswer([{ mods: 0, text: "?" }])
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(), question, event), "hit")
+    compare(AnswerMatcher.inputDisplay(question, event), "?")
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(),
+        textAnswer([{ mods: 0, text: "/" }]), event), "miss")
+    var input = AnswerMatcher.normalizeInput(question, event)
+    verify(!Object.prototype.hasOwnProperty.call(input, "physicalCode"))
+    verify(!Object.prototype.hasOwnProperty.call(input, "logicalKey"))
+
+    // Same text from different physical keys still answers; the right scan
+    // code with missing or wrong text never answers a character step.
+    var lower = textAnswer([{ mods: 0, text: "g" }])
+    var codes = [0, 42, 94]
+    for (var index = 0; index < codes.length; index++) {
+      var pressed = { key: Qt.Key_G, text: "g", modifiers: 0, nativeScanCode: codes[index] }
+      compare(AnswerMatcher.advance(AnswerMatcher.begin(), lower, pressed), "hit")
+      pressed.text = ""
+      compare(AnswerMatcher.advance(AnswerMatcher.begin(), lower, pressed), "miss")
+      pressed.text = "G"
+      compare(AnswerMatcher.advance(AnswerMatcher.begin(), lower, pressed), "miss")
+    }
+    // No scan-code-only fallback for the former special-key workaround.
+    var tab = textAnswer([{ mods: 0, named: "TAB" }])
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(), tab,
+        { key: 0x01ffffff, text: "", nativeScanCode: 23 }), "miss")
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(), tab,
+        { key: Qt.Key_Tab, text: "\t", nativeScanCode: 0 }), "hit")
   }
 
   // What a delegate is actually handed. A model value reaches one through
@@ -1164,10 +1070,11 @@ TestCase {
   // each row in the set-aside drawer showed a description beside an empty
   // column where its keys belong.
   function test_answersSurviveTheTripThroughAModel() {
-    var step = { modMask: 65, key: "P", keycode: 0, matchMode: "logical" }
-    var converted = { judgeMode: "keysym", context: "", steps: { length: 1, 0: step } }
+    var step = { mods: 4, text: "w" }
+    var converted = { judgeMode: "text", context: "normal", steps: { length: 1, 0: step } }
     compare(AnswerMatcher.stepCount(converted), 1)
-    compare(AnswerMatcher.stepLabels(converted)[0].join(" + "), "SUPER + SHIFT + P")
+    compare(AnswerMatcher.stepLabels(converted)[0].join(" + "), "CTRL + w")
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(), converted, textEvent(step)), "hit")
 
     var sequence = {
       judgeMode: "text", context: "normal",
@@ -1179,8 +1086,8 @@ TestCase {
     }).join(" › "), "[ › w")
     // And it is still judged, not just drawn.
     var state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, sequence, textEvent({ mods: 0, text: "[" }), {}), "progress")
-    compare(AnswerMatcher.advance(state, sequence, textEvent({ mods: 0, text: "w" }), {}), "hit")
+    compare(AnswerMatcher.advance(state, sequence, textEvent({ mods: 0, text: "[" })), "progress")
+    compare(AnswerMatcher.advance(state, sequence, textEvent({ mods: 0, text: "w" })), "hit")
   }
 
   // One action, several ways to reach it. herdr's own listing says
@@ -1198,22 +1105,22 @@ TestCase {
 
     // The shown answer.
     var state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "d" }), {}), "progress")
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "$" }), {}), "hit")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "d" })), "progress")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "$" })), "hit")
 
     // The other one, from the first key press.
     state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "D" }), {}), "hit")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "D" })), "hit")
 
     // And something neither accepts is still wrong.
     state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "x" }), {}), "miss")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "x" })), "miss")
 
     // A candidate that diverges partway drops out without taking the other
     // with it: "d" starts the shown answer, "w" is in neither.
     state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "d" }), {}), "progress")
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "w" }), {}), "miss")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "d" })), "progress")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "w" })), "miss")
   }
 
   function test_alternatesSurviveQmlArrayLikeConversion() {
@@ -1225,7 +1132,7 @@ TestCase {
     }
     compare(AnswerMatcher.alternateLabels(answer).join(","), "D")
     compare(AnswerMatcher.advance(AnswerMatcher.begin(), answer,
-                                  textEvent({ mods: 0, text: "D" }), {}), "hit")
+                                  textEvent({ mods: 0, text: "D" })), "hit")
   }
 
   function test_answersAreBoundedInSteps() {
@@ -1235,7 +1142,7 @@ TestCase {
     compare(AnswerMatcher.stepCount({ steps: [] }), 0)
     compare(AnswerMatcher.stepCount(null), 0)
     var state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, { steps: [] }, textEvent({ mods: 0, text: "a" }), {}), "miss")
+    compare(AnswerMatcher.advance(state, { steps: [] }, textEvent({ mods: 0, text: "a" })), "miss")
   }
 
   // A longer answer takes longer to type. The clamps were chosen for one
@@ -1243,10 +1150,10 @@ TestCase {
   function test_cardTimeGrowsWithTheStepCount() {
     var stats = Stats.defaults()
     var one = binding({ key: "3", arg: "3", description: "Switch to workspace 3" })
-    one.id = "hyprland/one"
-    one.answer = AnswerMatcher.chordAnswer(one)
+    one.id = "lazyvim/one"
+    one.answer = textAnswer([{ mods: 0, text: "g" }])
     var three = binding({ key: "4", arg: "4", description: "Switch to workspace 4" })
-    three.id = "hyprland/three"
+    three.id = "lazyvim/three"
     three.answer = textAnswer([{ mods: 0, text: "g" }, { mods: 0, text: "c" }, { mods: 0, text: "c" }])
 
     var learningOne = { binding: one, tier: "learning", queue: "due", remedial: false }
@@ -1367,35 +1274,22 @@ TestCase {
     testPack.refresh()
   }
 
-  function test_tmuxPrefersAnActuallyEnabledCBAndNeverInventsOne() {
-    var omarchy = Profiles.resolvedOptions("tmux", {
-      prefix: "C-Space", prefix2: "C-b"
-    })
-    compare(omarchy.prefix, "C-b")
-    compare(omarchy.prefix2, "C-Space")
-
-    var custom = Profiles.resolvedOptions("tmux", { prefix: "C-a", prefix2: "C-x" })
-    compare(custom.prefix, "C-a")
-    compare(custom.prefix2, "C-x")
-
-    var sole = Profiles.resolvedOptions("tmux", { prefix: "C-a" })
-    compare(sole.prefix, "C-a")
-    compare(sole.prefix2, "")
-
-    var duplicate = Profiles.resolvedOptions("tmux", { prefix2: "C-b" })
-    compare(duplicate.prefix, "C-b")
-    compare(duplicate.prefix2, "")
-
-    // A prefix set to something this cannot read is not an invitation to put
-    // C-b in front of a prefix that was read: that would make the card ask for
-    // a key the machine may never have bound.
-    var unreadable = Profiles.resolvedOptions("tmux", { prefix: "F13", prefix2: "C-a" })
-    compare(unreadable.prefix, "C-a")
-    compare(unreadable.prefix2, "")
-    // With nothing readable at all, nothing was proved and the default is all
-    // there is.
-    compare(Profiles.resolvedOptions("tmux", { prefix: "F13" }).prefix, "C-b")
-    compare(Profiles.resolvedOptions("tmux", ({})).prefix, "C-b")
+  function test_detectedLeaderOptionsRemainBoundedAndDeclared() {
+    var defaults = Profiles.resolvedOptions("lazyvim", null)
+    compare(defaults.leader, " ")
+    compare(defaults.localleader, "\\")
+    var custom = Profiles.resolvedOptions("lazyvim", { leader: ",", localleader: "-" })
+    compare(custom.leader, ",")
+    compare(custom.localleader, "-")
+    var invalid = Profiles.resolvedOptions("lazyvim", { leader: "F13", localleader: "x".repeat(33) })
+    compare(invalid.leader, " ")
+    compare(invalid.localleader, "\\")
+    var hostile = JSON.parse('{"leader":",","prefix":"C-a","__proto__":{},"constructor":"x","prototype":"x"}')
+    var resolved = Profiles.resolvedOptions("lazyvim", hostile)
+    compare(Object.getPrototypeOf(resolved), null)
+    compare(Object.keys(resolved).join(","), "leader,localleader")
+    compare(resolved.leader, ",")
+    compare(Object.keys(Profiles.resolvedOptions("tmux", hostile)).length, 0)
   }
 
   // A bundle LazyVim ships but does not enable is real on a machine that
@@ -1458,6 +1352,9 @@ TestCase {
     verify(added !== null)
     compare(added.customKind, "added")
     compare(AnswerMatcher.stepCount(added.answer), 2)
+    compare(typeAll(added.answer, [{ text: "g" }, { text: "Z" }]).verdict, "hit")
+    compare(typeAll(added.answer, [{ text: "g" }, { text: "z" }]).verdict, "miss")
+    compare(typeAll(changed.answer, [{ named: "SPACE" }, { text: "f" }, { text: "f" }]).verdict, "hit")
     compare(removed, null)
     compare(testPack.customAdded, 1)
     compare(testPack.customChanged, 1)
@@ -1508,6 +1405,7 @@ TestCase {
     }
     verify(spaced !== null)
     compare(spaced.answer.steps[0].named, "SPACE")
+    compare(typeAll(spaced.answer, [{ named: "SPACE" }, { text: "f" }, { text: "f" }]).verdict, "hit")
 
     testPack.options = ({ leader: "," })
     testPack.refresh()
@@ -1517,9 +1415,74 @@ TestCase {
     }
     verify(comma !== null)
     compare(comma.answer.steps[0].text, ",")
+    compare(typeAll(comma.answer, [{ text: "," }, { text: "f" }, { text: "f" }]).verdict, "hit")
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(), comma.answer,
+        textEvent({ named: "SPACE" })), "miss")
     // The entry keeps its identity across the change, so progress survives it.
     compare(comma.id, spaced.id)
     testPack.options = ({ leader: " " })
+    testPack.refresh()
+  }
+
+  function test_leaderFindSequenceHoldsPrefixThenHitsOrSchedulesRemedial() {
+    testPack.options = Profiles.resolvedOptions("lazyvim", { leader: " " })
+    testPack.refresh()
+    var card = testPack.bindings.find(function(item) { return item.localId === "normal/<leader>ff" })
+    verify(card !== undefined)
+    compare(AnswerMatcher.stepCount(card.answer), 3)
+    var stats = Stats.defaults()
+    Stats.recordGuided(stats, card.id, 1, 100)
+    var before = JSON.stringify(stats)
+    var state = AnswerMatcher.begin()
+    compare(AnswerMatcher.advance(state, card.answer, textEvent({ named: "SPACE" })), "progress")
+    compare(AnswerMatcher.advance(state, card.answer, textEvent({ text: "f" })), "progress")
+    compare(AnswerMatcher.typedSteps(state), 2)
+    // A held prefix yields neither a hit nor a miss; callers must not record
+    // a first try or a lapse until a terminal verdict (Keycade.handleGameInput).
+    compare(JSON.stringify(stats), before)
+    var hit = AnswerMatcher.advance(state, card.answer, textEvent({ text: "f" }))
+    compare(hit, "hit")
+    Stats.recordFirstTry(stats, card.id, hit === "hit", 600, 1, 700)
+    compare(stats.bindings[card.id].firstTryAttempts, 1)
+    compare(stats.bindings[card.id].firstTryCorrect, 1)
+    compare(stats.bindings[card.id].lapseCount, 0)
+    compare(AnswerMatcher.typedSteps(state), 0)
+
+    compare(AnswerMatcher.advance(state, card.answer, textEvent({ named: "SPACE" })), "progress")
+    var miss = AnswerMatcher.advance(state, card.answer, textEvent({ text: "x" }))
+    compare(miss, "miss")
+    compare(AnswerMatcher.typedSteps(state), 0)
+    // The terminal miss feeds the existing first-try/remedial seam; the
+    // scheduler still spaces the retest three to five other cards away.
+    Stats.recordFirstTry(stats, card.id, miss === "hit", -1, 2, 800)
+    var run = Scheduler.build(testPack.bindings, stats, 24, { now: 800, runId: 2 })
+    run[0] = { binding: card, tier: "learning", queue: "due", remedial: false }
+    var remedial = Scheduler.insertRemedial(run, 0, card)
+    compare(stats.bindings[card.id].firstTryAttempts, 2)
+    compare(stats.bindings[card.id].firstTryCorrect, 1)
+    compare(stats.bindings[card.id].lapseCount, 1)
+    var retest = remedial.findIndex(function(item) { return item.remedial && item.binding.id === card.id })
+    verify(retest >= 4 && retest <= 6)
+    // A correction must retype the leader; completing only the old suffix
+    // cannot answer after the miss.
+    compare(AnswerMatcher.advance(state, card.answer, textEvent({ text: "f" })), "miss")
+    compare(typeAll(card.answer, [{ named: "SPACE" }, { text: "f" }, { text: "f" }]).verdict, "hit")
+  }
+
+  function test_customLocalleaderUsesTheSameTextSequencePath() {
+    testPack.options = Profiles.resolvedOptions("lazyvim", { leader: ",", localleader: "-" })
+    testPack.overrides = [{ op: "set", lhs: "<localleader>u", desc: "My local command", contexts: ["normal"] }]
+    testPack.refresh()
+    var custom = testPack.bindings.find(function(item) { return item.localId === "normal/<localleader>u" })
+    verify(custom !== undefined)
+    compare(custom.customKind, "added")
+    compare(custom.category, "misc")
+    compare(typeAll(custom.answer, [{ text: "-" }, { text: "u" }]).verdict, "hit")
+    var state = AnswerMatcher.begin()
+    compare(AnswerMatcher.advance(state, custom.answer, textEvent({ text: "-" })), "progress")
+    compare(AnswerMatcher.advance(state, custom.answer, textEvent({ text: "U" })), "miss")
+    testPack.options = Profiles.resolvedOptions("lazyvim", null)
+    testPack.overrides = []
     testPack.refresh()
   }
 
@@ -1769,7 +1732,7 @@ TestCase {
     var state = AnswerMatcher.begin()
     var verdict = ""
     for (var step = 0; step < answer.steps.length; step++)
-      verdict = AnswerMatcher.advance(state, answer, textEvent(answer.steps[step]), {})
+      verdict = AnswerMatcher.advance(state, answer, textEvent(answer.steps[step]))
     compare(verdict, "hit")
 
     Stats.recordGuided(stats, deck[0].binding.id, 1, 1000)
