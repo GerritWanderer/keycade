@@ -1,7 +1,7 @@
 ## 1. Removal of Legacy Grounds and Keysym Judging
 
-- [ ] 1.1 Remove legacy helpers `bin/herdr-keys-json` and `bin/tmux-keys-json`, and prune `bin/keybinds-json` to only retain `--guard-status`, verifying the retained `--guard-status` unit-test cases still pass (no live compositor needed)
-- [ ] 1.2 Remove tmux prefix parsing functions and tables from `bin/app-config-json`, verifying unit tests still pass for LazyVim options
+- [x] 1.1 Remove legacy helpers `bin/herdr-keys-json` and `bin/tmux-keys-json`, and prune `bin/keybinds-json` to only retain `--guard-status`, verifying the retained `--guard-status` unit-test cases still pass (no live compositor needed)
+- [x] 1.2 Remove tmux prefix parsing functions and tables from `bin/app-config-json`, verifying unit tests still pass for LazyVim options
 - [x] 1.3 Remove QML sources `lib/sources/HyprlandSource.qml`, `lib/sources/HerdrSource.qml`, `lib/sources/TmuxLiveSource.qml`, and `lib/sources/hyprland/`, verifying no dangling import references remain
 - [x] 1.4 Remove `neovim.json`, `tmux.json`, and `vim.json` from `assets/packs/` and remove the vim, neovim and tmux collectors from `tools/build_packs.py`, verifying `python3 tools/build_packs.py` succeeds with only the LazyVim path
 - [ ] 1.5 Prune `lib/Profiles.js` to retain only `lazyvim` profile definition and remove keysym judging paths from `lib/AnswerMatcher.js` and `lib/InputNormalizer.js`, verifying sequence text judging continues to pass tests
@@ -11,9 +11,9 @@
 
 ## 2. Deck Configuration Reader and Hardening
 
-- [ ] 2.1 Add `keycade` section with `.config/omarchy/keycade/decks.json` to `FILES` table in `bin/app-config-json`
-- [ ] 2.2 Implement `read_decks(home, files)` in `bin/app-config-json` with R2 bounds checks (max 32 decks, ID regex `^[a-z][a-z0-9-]{0,31}$`, name <= 48 chars, closed seed vocabulary), verifying with dedicated unit tests
-- [ ] 2.3 Add unit test suite `tests/test_decks_json.py` covering valid configs, missing files, malformed JSON, prototype pollution keys, duplicate and malformed ids, seed vocabulary rejections, and cap enforcement, verifying `python3 -m unittest discover -s tests -p "test_decks_json.py"` passes
+- [x] 2.1 Add `keycade` section with `.config/omarchy/keycade/decks.json` to `FILES` table in `bin/app-config-json`
+- [x] 2.2 Implement `read_decks(home, files)` in `bin/app-config-json` with R2 bounds checks (max 32 decks, ID regex `^[a-z][a-z0-9-]{0,31}$`, name <= 48 chars, closed seed vocabulary), verifying with dedicated unit tests
+- [x] 2.3 Add unit test suite `tests/test_decks_json.py` covering valid configs, missing files, malformed JSON, prototype pollution keys, duplicate and malformed ids, seed vocabulary rejections, and cap enforcement, verifying `python3 -m unittest discover -s tests -p "test_decks_json.py"` passes
 - [ ] 2.4 Compile the four shipped starter decks (Navigation, LSP & Diagnostics, Search & Find, Git) with `nameKey` localisation records, verifying each seed category resolves against the LazyVim pack
 
 ## 3. State Store and Schema Migrations
@@ -37,7 +37,7 @@
 
 ## 6. Fuzzing, Test Suites, and OpenSSF Verification
 
-- [ ] 6.1 Retarget `tests/fuzz_keybinds.py` to fuzz `app-config-json.read_decks` against hostile JSON inputs while preserving `import atheris`, verifying `python3 tests/fuzz_keybinds.py -runs=1000` runs cleanly
+- [x] 6.1 Retarget `tests/fuzz_keybinds.py` to fuzz `app-config-json.read_decks` against hostile JSON inputs while preserving `import atheris`, verifying `python3 tests/fuzz_keybinds.py -runs=1000` runs cleanly
 - [ ] 6.2 Update and run the full Python test suite, verifying all remaining and newly added tests pass: `python3 -m unittest discover -s tests -p "test_*.py"`
 - [ ] 6.3 Run QML algorithm tests with offscreen Qt6 runner: `QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/qml/tst_algorithms.qml -import /usr/lib/qt6/qml`
 - [ ] 6.4 Validate QML components with `qmllint Keycade.qml lib/*.qml` and verify OpenSSF Scorecard and review invariants (R1–R8) remain satisfied

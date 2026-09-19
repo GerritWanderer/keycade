@@ -92,3 +92,70 @@ in favor of the user's explicit green-at-every-commit rule.
 - Logs: `/tmp/keycade-lazyvim-decks-gates/wp1c/` and `wp1c-resume/`.
 - Tasks 1.3 and 1.4 complete; task 1.7 remains partial until helper/matcher
   teardown completes.
+
+## WP1a + WP1b + WP2 — atomic helper/reader landing — PASS
+
+WP1a removed tmux configuration parsing and its seven dedicated tests, adapting
+shared security/CLI tests to LazyVim rather than deleting them. Independent
+non-fuzz gate: 181 Python / 80 QML / lint / strict validation PASS. Challenger
+reviewed the exact saved WP1a patch and returned PASS with no findings.
+
+WP1b reduced `keybinds-json` to the trusted read-only guard preflight and removed
+Herdr/tmux helpers, their tests, and their dedicated fixtures. Applicable trusted
+command, environment, bounds, deadline and process-reaping tests were retained.
+Independent initial non-fuzz gate: 108 Python / 80 QML PASS.
+
+WP2 added `read_decks` using bounded descriptor-relative reads, safe XDG handling,
+closed pack vocabularies, sanitized names and counted rejection. The independent
+consumer is `DeckValidation.js`, wired into the existing `AppConfigSource` launch
+and incremental transport. Its interface is `{schemaVersion: 1, status, reason,
+decks, rejected}`, distinguishing absent, valid (including empty), and invalid
+configuration. Atheris now actually exercises hostile raw and structured deck
+JSON; it keeps `import atheris` and no longer imports deleted helpers.
+
+### Findings and resolutions
+
+- WP2 blocking R5 finding: incomplete terminal escape stripping left ESC command
+  bytes in names. Both boundaries now use complete scanners with matched,
+  exhaustive final/intermediate-range and malformed/truncated-sequence tests.
+- WP2 advisory resolved: real offscreen Quickshell `AppConfigSource.accept()`
+  tests cover retained-object isolation, schema/prototype defenses, stream
+  handling and combined transport limits, beyond pure-validator tests.
+- **User clarification:** reserved `all.seed` is entirely opaque, with no
+  traversal or nested rejection counts. Unknown keys on the declaration itself
+  still count. This clarifies the existing reserved-deck override, not membership
+  semantics or scope. Challenger accepted the clarification and returned PASS.
+- WP1b blocking schema finding: malformed guard values could report disabled
+  false. The helper now accepts only real versioned Hyprland int/bool schemas
+  with exact option identity, rejecting conflicting/unsupported/wrong-typed
+  values. Real-schema and hostile-shape tests cover the boundary.
+- WP1b blocking R8 finding: generic post-spawn errors and ignored PDEATHSIG setup
+  failures could miss teardown. Setup/prctl failures now prevent execution;
+  every post-spawn exit path kills and reaps the group. Fault-injection tests
+  assert actual child/descendant liveness, not only error strings.
+- WP1b consumer advisory resolved with authorized allowlist expansions:
+  `lib/InputGuard.qml`, shared pure `lib/GuardStatus.js`, and
+  `tests/qml/tst_guard_status.qml`. The consumer requires the guard type tag and
+  validates the bounded payload without altering the inhibitor lifecycle.
+- Authorized CI compatibility expansion: `tests/mocks/hyprctl` now models the
+  surviving guard-only query with a real schema, refuses unsupported requests
+  and absent sockets, and has hermetic socket-backed regression tests. CI does
+  install this mock; it was not unreferenced.
+- A pre-existing sticky InputGuard overflow flag was noted during delta review;
+  it was unchanged and is outside these corrections (not a blocker or claimed
+  fix). Preserve this observation for the final audit/report.
+
+### Final independent gate and review
+
+Orchestrator: **146 Python / 80 core QML / 56 reader QML / 7 guard QML**, lint
+exit 0 (baseline metadata warnings), Atheris 1000, strict OpenSpec, whitespace
+checks, four isolated Wayland integrations, and live guard preflight all PASS.
+Challenger returned separate PASS verdicts for WP1a, WP1b correction delta, and
+WP2 correction delta. No commits occurred during the temporary working-tree
+fuzzer break. Logs are under `/tmp/keycade-lazyvim-decks-gates/`, especially
+`wp1b-final/`, `wp1b-fixed/`, and `wp2-fixed/`.
+
+Remaining teardown integration: side lane WP1d and WP1e are individually gated
+and reviewed; remove the canonical fixture after their matcher changes merge,
+and remove 46 retained Herdr locale keys per language after helper deletion is
+visible on that lane. Tasks 1.6 and 1.7 remain unchecked until those follow-ups.

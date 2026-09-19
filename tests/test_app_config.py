@@ -315,80 +315,6 @@ class KeymapTests(unittest.TestCase):
         })
 
 
-class TmuxTests(unittest.TestCase):
-    def setUp(self):
-        self.home = Home()
-        self.addCleanup(self.home.close)
-
-    def prefix(self, body: str) -> dict:
-        self.home.write(".config/tmux/tmux.conf", body)
-        return self.home.snapshot("tmux")
-
-    def test_reads_the_prefix_omarchy_ships(self):
-        # Omarchy enables C-Space and keeps C-b as prefix2; resolution later
-        # prefers the actually enabled C-b while preserving both answers.
-        found = self.prefix("set -g prefix C-Space\nset -g prefix2 C-b\n")
-        self.assertEqual(found["options"], {"prefix": "C-Space", "prefix2": "C-b"})
-        self.assertEqual(found["skipped"], {})
-
-    def test_the_spare_prefix_is_read_when_present(self):
-        # Resolution decides which value is shown; this reader preserves both
-        # effective inputs. No prefix2 is the normal case, not a read failure.
-        found = self.prefix("set -g prefix2 C-b\n")
-        self.assertNotIn("prefix", found["options"])
-        self.assertEqual(found["options"]["prefix2"], "C-b")
-        self.assertNotIn("prefix2", self.prefix("set -g prefix C-a")["skipped"])
-
-    def test_accepts_the_spellings_tmux_configs_use(self):
-        for body in (
-            "set -g prefix C-a",
-            "set-option -g prefix C-a",
-            "  set -g prefix C-a  ",
-            "set -gq prefix 'C-a' # comment",
-            'set-option -qg prefix "C-a"',
-            "set -q -g prefix \\\nC-a",
-        ):
-            with self.subTest(body=body):
-                self.assertEqual(self.prefix(body)["options"]["prefix"], "C-a")
-
-    def test_later_literal_assignment_wins_and_dynamic_loading_falls_back(self):
-        self.assertEqual(self.prefix("# set -g prefix C-a")["skipped"]["prefix"], "never set")
-        self.assertEqual(
-            self.prefix("set -g prefix C-a\nset -g prefix C-b")["options"]["prefix"], "C-b")
-        dynamic = self.prefix("set -g prefix C-a\nsource-file ~/.tmux.local.conf")
-        self.assertEqual(dynamic["options"], {})
-        self.assertIn("dynamically", dynamic["skipped"]["prefix"])
-
-    def test_a_prefix_set_somewhere_conditional_is_not_read_as_certain(self):
-        """tmux takes any unambiguous abbreviation of a command name, and its
-        own %if blocks are decided when tmux reads the file. Either way what
-        runs is not decidable here, so the whole prefix read is refused rather
-        than reported as a value."""
-        for body in (
-            "%if #{==:#{host},laptop}\nset -g prefix C-a\n%endif\n",
-            'if -b "true" "set -g prefix C-a"\nset -g prefix C-x\n',
-            'run "true"\nset -g prefix C-a\n',
-            "sou other.conf\nset -g prefix C-a\n",
-        ):
-            with self.subTest(body=body):
-                found = self.prefix(body)
-                self.assertEqual(found["options"], {}, body)
-                self.assertEqual(found["skipped"]["prefix"],
-                                 "configuration may set prefix dynamically", body)
-
-    def test_prefix2_none_is_an_explicit_absence(self):
-        found = self.prefix("set -g prefix C-a\nset -g prefix2 None")
-        self.assertEqual(found["options"], {"prefix": "C-a"})
-        self.assertNotIn("prefix2", found["skipped"])
-
-    def test_conflicting_fixed_config_files_are_not_guessed(self):
-        self.home.write(".config/tmux/tmux.conf", "set -g prefix C-a")
-        self.home.write(".tmux.conf", "set -g prefix C-x")
-        found = self.home.snapshot("tmux")
-        self.assertEqual(found["options"], {})
-        self.assertEqual(found["skipped"]["prefix"], "fixed config files disagree")
-
-
 class BoundsTests(unittest.TestCase):
     def setUp(self):
         self.home = Home()
@@ -426,20 +352,21 @@ class BoundsTests(unittest.TestCase):
         self.assertNotIn("leader", self.home.snapshot("lazyvim")["options"])
 
     def test_the_output_is_one_bounded_json_line(self):
-        self.home.write(".config/tmux/tmux.conf", "set -g prefix C-a")
+        self.home.write(".config/nvim/lua/config/options.lua",
+                        'vim.g.mapleader = ","')
         import subprocess
         result = subprocess.run(
             [sys.executable, str(ROOT / "bin" / "app-config-json"),
-             "--profile", "tmux", "--home", str(self.home.path)],
+             "--profile", "lazyvim", "--home", str(self.home.path)],
             capture_output=True, text=True, check=True)
         self.assertEqual(len(result.stdout.strip().splitlines()), 1)
-        self.assertEqual(json.loads(result.stdout)["options"], {"prefix": "C-a"})
+        self.assertEqual(json.loads(result.stdout)["options"], {"leader": ","})
 
     def test_an_unusable_home_is_refused_before_anything_is_opened(self):
         import subprocess
         result = subprocess.run(
             [sys.executable, str(ROOT / "bin" / "app-config-json"),
-             "--profile", "tmux", "--home", "relative/path"],
+             "--profile", "lazyvim", "--home", "relative/path"],
             capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("home", result.stdout + result.stderr)
@@ -448,7 +375,7 @@ class BoundsTests(unittest.TestCase):
         import subprocess
         result = subprocess.run(
             [sys.executable, str(ROOT / "bin" / "app-config-json"),
-             "--profile", "tmux", "--home", "/tmp/bad\x01home"],
+             "--profile", "lazyvim", "--home", "/tmp/bad\x01home"],
             capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("home", result.stdout + result.stderr)
