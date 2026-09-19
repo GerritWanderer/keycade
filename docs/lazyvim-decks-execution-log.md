@@ -265,3 +265,26 @@ M1/M2 are closed, and the side lane is removed before WP4 as planned.
 - Challenger **PASS**, no blocking or advisory findings. Tasks 2.4 and 4.1–4.3
   complete; home list, curation drawer and dynamic HUD remain their assigned
   later packages.
+
+## WP7a — home deck list — PASS
+
+- Replaced the home cabinet grid with a scrollable, independently capped
+  33-row deck list; all first, declaration order, live mastery/counts and
+  selected-deck header. User names use bounded/elided SafeText; starters use
+  the five existing localized keys.
+- Empty decks remain selectable but Start/Resume mouse controls are disabled;
+  the unchanged Enter path reaches the pre-allocation refusal. Bounded config
+  fallback/rejection notices and an empty-deck Browse hint are visible.
+- Only Keycade.qml and new tests/test_deck_ui.py changed. Five actual-component
+  UI tests retain real reader/store/engine/scheduler/delegates and substitute
+  only the panel/focus boundary for safe offscreen rendering.
+- Orchestrator full gate: **177 Python**, all QML suites (73/21/56/7/22), lint
+  exit 0, fuzz 1000, strict validation, whitespace checks and four real Wayland
+  integrations PASS. Renders were inspected independently: plain markup,
+  long-name elision, bounded layout, localized names and disabled empty Start.
+- Challenger **PASS**, no findings. Logs: `wp7a/`; temporary visual evidence:
+  `/tmp/keycade-wp7a-renders/home-user-en.png` and `home-starters-zh.png`.
+- New UI copy is intentionally static English until WP8 freeze/localization:
+  DECKS, empty-deck Browse hint, invalid-config and rejected-count notices.
+  WP7b must remove COMING SOON when the drawer exists; WP8 removes the unused
+  groundLabel key. HUD /24 is deliberately left for WP7c. Task 5.1 complete.

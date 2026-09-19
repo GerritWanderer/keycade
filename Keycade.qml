@@ -36,7 +36,11 @@ Item {
   property var deckProgress: Object.create(null)
   property string deckConfigReason: ""
   property int deckConfigRejected: 0
-  property string startRefusal: "" // bounded codes for the later home UI
+  property string startRefusal: "" // bounded code driving the home refusal hint
+  // Zero eligible cards means there is nothing to deal: the home controls
+  // stay visible but inert, and Enter is refused before any run identity
+  // could be allocated (startRun re-checks this same condition first).
+  readonly property bool startBlocked: !root.eligibleBindings.length
   property int sessionSize: 0
   property var deck: []
   property int cardIndex: 0
@@ -669,6 +673,36 @@ Item {
     var known = root.groundProgress[String(id)]
     if (!known || !known.total) return "—"
     return known.mastered + "/" + known.total
+  }
+
+  // R5 display boundary for deck names: compiled starters resolve through
+  // their frozen locale keys; user-declared names are already sanitized at
+  // both config boundaries and are rendered as bounded, elided plain text.
+  function deckDisplayName(definition) {
+    if (!definition) return ""
+    if (definition.nameKey) {
+      var localized = i18n.t(definition.nameKey)
+      if (localized !== definition.nameKey) return localized
+    }
+    return String(definition.name || "")
+  }
+
+  // The header badge identifies the deck being trained, the way it used to
+  // identify the ground. Falls back to the supply name before decks arrive.
+  function headerDeckName() {
+    return root.deckDisplayName(Decks.find(root.deckDefinitions, root.deckId))
+  }
+
+  // One bounded line for a deck-config fallback reason or the counted
+  // rejections of an otherwise valid file. Both are fixed-vocabulary codes
+  // and capped counters from the reader, and an invalid config never blocks
+  // training - it only narrows the list.
+  function deckConfigNote() {
+    if (root.deckConfigReason !== "")
+      return "DECKS CONFIG INVALID (" + root.deckConfigReason + ") — TRAINING ON ALL"
+    if (root.deckConfigRejected > 0)
+      return "DECKS CONFIG: " + root.deckConfigRejected + " REJECTED"
+    return ""
   }
 
   function commitActiveTraining() {
@@ -1449,17 +1483,23 @@ Item {
               text: i18n.t("brandSubtitle"); color: root.voidColor
               font.family: "monospace"; font.pixelSize: 11; font.bold: true
             }
-            // Which cabinet this is. The home screen names it too, but a run
-            // is played away from the home screen, and "which ground am I on"
+            // Which deck this is. The home screen names it too, but a run
+            // is played away from the home screen, and "which deck am I on"
             // has to be answerable without leaving the run to find out.
             Rectangle {
               anchors.verticalCenter: parent.verticalCenter
-              width: groundBadge.implicitWidth + 16; height: 18
+              // Bounded: a user-declared deck name can be 48 codepoints, and
+              // it must never run under the top-bar controls.
+              width: Math.min(148, groundBadge.implicitWidth + 16); height: 18
               color: root.voidColor
               SafeText {
                 id: groundBadge
+                objectName: "groundBadge"
                 anchors.centerIn: parent
-                text: i18n.t("profile_" + root.profileId)
+                width: Math.min(implicitWidth, 132)
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight; maximumLineCount: 1
+                text: root.headerDeckName() || i18n.t("profile_" + root.profileId)
                 color: root.primaryColor
                 font.family: "monospace"; font.pixelSize: 10; font.bold: true; font.letterSpacing: 2
               }
@@ -2001,6 +2041,7 @@ Item {
   Component {
     id: homeCard
     Item {
+      id: homeArea
       Column {
         anchors.centerIn: parent
         width: parent.width - 70
@@ -2034,59 +2075,108 @@ Item {
           color: root.coinColor
           font.pixelSize: 15; wrapMode: Text.WordWrap
         }
-        // Keep the existing cabinet presentation for the sole available supply;
-        // deck selection and its new UI are a separate step.
+        // D9: the cabinet grid is retired with the grounds. Decks are one
+        // bounded, vertical, scrollable list - all pinned first, then
+        // declaration order - showing name, live card count and mastery.
         SafeText {
           width: parent.width; horizontalAlignment: Text.AlignHCenter
           visible: root.view === "home"
-          text: i18n.t("groundLabel")
+          text: "DECKS"
           color: root.mutedColor; font.family: "monospace"; font.pixelSize: 10
           font.bold: true; font.letterSpacing: 3
         }
-        Column {
+        Rectangle {
           anchors.horizontalCenter: parent.horizontalCenter
-          spacing: 8
           visible: root.view === "home"
-          Repeater {
-            model: [root.availableProfiles]
-            delegate: Row {
-              id: groundRow
-              required property var modelData
-              anchors.horizontalCenter: parent.horizontalCenter
-              spacing: 10
-          Repeater {
-            model: groundRow.modelData
+          width: Math.min(parent.width, 470)
+          // The cabinet is a fixed frame: never let the list push the start
+          // controls (or the status line) out of it, however many decks are
+          // declared.
+          height: Math.max(52, Math.min(132, homeArea.height - 236))
+          color: root.voidColor; border.width: 2; border.color: root.mutedColor
+          ListView {
+            id: deckList
+            objectName: "deckList"
+            anchors.fill: parent; anchors.margins: 3
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            // Independently re-capped here as well: both config boundaries
+            // already enforce one reserved deck plus at most 32 declared (R2).
+            model: root.deckDefinitions.slice(0, 33)
             delegate: Rectangle {
-              id: groundDatum
+              id: deckRow
+              objectName: "deckRow:" + deckRow.modelData.id
               required property var modelData
-              readonly property bool current: groundDatum.modelData === root.profileId
-              width: Math.max(124, groundName.implicitWidth + 30); height: 38
-              color: groundDatum.current ? root.screenColor : root.voidColor
-              border.width: groundDatum.current ? 3 : 2
-              border.color: groundDatum.current ? root.primaryColor : root.mutedColor
-              Column {
-                anchors.centerIn: parent
-                spacing: 1
-                SafeText {
-                  id: groundName
-                  anchors.horizontalCenter: parent.horizontalCenter
-                  text: i18n.t("profile_" + groundDatum.modelData)
-                  color: groundDatum.current ? root.inkColor : root.mutedColor
-                  font.family: "monospace"; font.pixelSize: 12; font.bold: true; font.letterSpacing: 1
-                }
-                SafeText {
-                  anchors.horizontalCenter: parent.horizontalCenter
-                  text: root.groundProgressLabel(groundDatum.modelData)
-                  color: groundDatum.current
-                       ? (root.groundLoading ? root.mutedColor : root.successColor)
-                       : root.mutedColor
-                  font.family: "monospace"; font.pixelSize: 10; font.bold: true
-                }
+              readonly property bool current: deckRow.modelData.id === root.deckId
+              // Live per-deck standing. The map is null-prototyped and deck
+              // ids are validated config tokens, never raw external keys (R4).
+              readonly property var counts: root.deckProgress[deckRow.modelData.id]
+              readonly property int total: deckRow.counts ? Number(deckRow.counts.total || 0) : 0
+              readonly property int mastered: deckRow.counts ? Number(deckRow.counts.mastered || 0) : 0
+              readonly property bool complete: deckRow.total > 0 && deckRow.mastered === deckRow.total
+              width: deckList.width; height: 26
+              color: deckRow.current ? root.screenColor : root.voidColor
+              border.width: deckRow.current ? 2 : 0
+              border.color: root.primaryColor
+              SafeText {
+                anchors.left: parent.left; anchors.leftMargin: 6
+                anchors.verticalCenter: parent.verticalCenter
+                text: deckRow.current ? "▶" : ""
+                color: root.primaryColor; font.family: "monospace"; font.pixelSize: 10; font.bold: true
+              }
+              SafeText {
+                id: deckRowName
+                objectName: "deckRowName"
+                anchors.left: parent.left; anchors.leftMargin: 24
+                anchors.right: deckRowCounts.left; anchors.rightMargin: 8
+                anchors.verticalCenter: parent.verticalCenter
+                elide: Text.ElideRight; maximumLineCount: 1
+                text: root.deckDisplayName(deckRow.modelData)
+                color: deckRow.current ? root.inkColor : root.mutedColor
+                font.family: "monospace"; font.pixelSize: 12
+                font.bold: deckRow.current
+              }
+              SafeText {
+                id: deckRowCounts
+                objectName: "deckRowCounts"
+                anchors.right: parent.right; anchors.rightMargin: 8
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.min(implicitWidth, 110)
+                horizontalAlignment: Text.AlignRight
+                elide: Text.ElideRight; maximumLineCount: 1
+                text: (deckRow.complete ? "★ " : "") + deckRow.mastered + "/" + deckRow.total
+                color: deckRow.complete ? root.coinColor
+                     : deckRow.current ? root.successColor : root.mutedColor
+                font.family: "monospace"; font.pixelSize: 10; font.bold: true
+              }
+              MouseArea {
+                objectName: "deckRowArea"
+                anchors.fill: parent
+                onClicked: root.selectDeck(deckRow.modelData.id)
               }
             }
           }
-            }
-          }
+        }
+        // A config the reader rejected still trains (on all); say so plainly.
+        SafeText {
+          objectName: "deckConfigNote"
+          width: parent.width; horizontalAlignment: Text.AlignHCenter
+          visible: root.view === "home" && root.deckConfigNote() !== ""
+          text: root.deckConfigNote()
+          color: root.coinColor; font.family: "monospace"; font.pixelSize: 10; font.bold: true
+          wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
+        }
+        // Zero-card decks stay listed and selectable for later curation, but
+        // there is nothing to deal: the controls refuse and this hint names
+        // where adding cards will live.
+        SafeText {
+          objectName: "emptyDeckHint"
+          width: parent.width; horizontalAlignment: Text.AlignHCenter
+          visible: root.view === "home" && !root.groundLoading && !root.trainingLockedOut
+                   && root.startRefusal === "empty-deck"
+          text: "EMPTY DECK — ADD CARDS WITH THE BROWSE DRAWER (COMING SOON)"
+          color: root.coinColor; font.pixelSize: 12; font.bold: true
+          wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
         }
         // A pack ground says where its table came from, so nothing here can
         // be read as "these are the keymaps on your machine". Two short lines
@@ -2103,22 +2193,34 @@ Item {
           anchors.horizontalCenter: parent.horizontalCenter
           spacing: 10
           visible: root.view === "home" && !root.trainingLockedOut
-          // Reachable but not usable while the picked cabinet is still coming
-          // in: there is no table to deal from yet, and a button that looks
-          // ready but does nothing is worse than one that looks busy.
-          opacity: root.groundLoading ? 0.4 : 1
+          // Reachable but not usable while the selected deck is still
+          // coming in or has no cards to deal: a button that looks ready but
+          // does nothing is worse than one that looks busy.
+          opacity: root.groundLoading || root.startBlocked ? 0.4 : 1
           Rectangle {
+            objectName: "startButton"
             width: root.resumeAvailable ? 200 : 240; height: 46
             color: root.primaryColor; border.width: 4; border.color: root.voidColor
             SafeText { anchors.centerIn: parent; width: parent.width - 16; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; text: "▶  " + i18n.t(root.resumeAvailable ? "resumeRun" : "startRun"); color: root.voidColor; font.family: "monospace"; font.bold: true; font.pixelSize: 15 }
-            MouseArea { anchors.fill: parent; onClicked: root.startPrimary() }
+            MouseArea {
+              objectName: "startButtonArea"
+              anchors.fill: parent
+              enabled: !root.groundLoading && !root.startBlocked
+              onClicked: root.startPrimary()
+            }
           }
           Rectangle {
+            objectName: "startFreshButton"
             width: 160; height: 46
             visible: root.resumeAvailable
             color: root.screenColor; border.width: 2; border.color: root.mutedColor
             SafeText { anchors.centerIn: parent; width: parent.width - 12; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; text: i18n.t("startFresh"); color: root.mutedColor; font.family: "monospace"; font.bold: true; font.pixelSize: 12 }
-            MouseArea { anchors.fill: parent; onClicked: root.startRun() }
+            MouseArea {
+              objectName: "startFreshArea"
+              anchors.fill: parent
+              enabled: !root.groundLoading && !root.startBlocked
+              onClicked: root.startRun()
+            }
           }
         }
       }

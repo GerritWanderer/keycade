@@ -30,7 +30,7 @@
 
 ## 5. UI Refactoring and Curation Drawer
 
-- [ ] 5.1 Replace the 2x3 cabinet grid on the Home screen in `Keycade.qml` with a vertical scrollable deck list displaying deck title, card count, mastery indicator, and pinned `all` deck; disable Start on zero-card decks with a bounded hint
+- [x] 5.1 Replace the 2x3 cabinet grid on the Home screen in `Keycade.qml` with a vertical scrollable deck list displaying deck title, card count, mastery indicator, and pinned `all` deck; disable Start on zero-card decks with a bounded hint
 - [ ] 5.2 Implement the Browse-and-Pick Drawer in `Keycade.qml` featuring a target deck selector, category/custom/extra filter chips, and per-row membership toggles; the existing in-run exclusion gesture is retained unchanged and deck assignment happens only in this drawer (D12)
 - [ ] 5.3 Add locale keys for the deck list, drawer, and empty-deck hint in `lib/Locales.js` in both languages
 - [ ] 5.4 Update session progress display in `Keycade.qml` from hardcoded `/ 24` to dynamic `/ sessionSize`
