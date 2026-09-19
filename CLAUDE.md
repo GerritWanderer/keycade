@@ -46,7 +46,6 @@ omarchy restart shell
   5. `NEOVIM`: Default upstream reference tables (`lib/Packs.js`).
   6. `LazyVim`: Dynamic leader calibration & extra plugins via `bin/app-config-json`.
 - **Input Isolation**: `lib/InputGuard.qml` manages Wayland `ShortcutInhibitor` so keypresses never leak to desktop apps during training.
-- **Physical Key Matching**: Shortcuts match unshifted base keysyms from `libxkbcommon` to mirror Hyprland dispatch logic.
 - **State Storage**: `lib/StateStore.qml` & `bin/state-store` use descriptor-relative atomic writes (0600 temp files + fsync + atomic rename).
 
 ---

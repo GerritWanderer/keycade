@@ -159,3 +159,23 @@ Remaining teardown integration: side lane WP1d and WP1e are individually gated
 and reviewed; remove the canonical fixture after their matcher changes merge,
 and remove 46 retained Herdr locale keys per language after helper deletion is
 visible on that lane. Tasks 1.6 and 1.7 remain unchecked until those follow-ups.
+
+## WP1d and WP1e — side-lane integration
+
+- WP1d commit `3f0a029`: LazyVim-only registry and text-only judging. TextKey is
+  byte-identical, and legacy v1–v3 stats / pre-profile sessions remain forever
+  Hyprland rather than being relabeled by the new default. Foreign namespaces
+  and colon-qualified exclusions remain valid but inert. Authorized integration
+  test adjustment changed only the obsolete activeProfile selection expectation.
+  Independent gates: 188 Python / 73 QML, fuzz, both lint checks, strict validation
+  and four Wayland integrations PASS; Challenger PASS with no findings.
+- WP1e commit `01bed50`: removed 316 English and 440 Chinese unused locale keys,
+  preserving retained values, all 333 LazyVim descriptions and dynamic live keys.
+  Removed obsolete XKB references from agent instructions without weakening
+  security or tests. Independent gate: 188 Python / 73 QML plus fuzz, lint,
+  regeneration and strict validation PASS. Challenger PASS for this coherent
+  side-lane step, explicitly requiring the remaining Herdr-key follow-up.
+- Both reviewed commits merged without conflicts after the atomic helper/reader
+  commit. Integrated gate: 146 Python / 73 core QML / 56 reader QML / 7 guard QML,
+  fuzz 1000, lint, strict validation and four Wayland integrations PASS. Logs:
+  `/tmp/keycade-lazyvim-decks-gates/teardown-merge/`.

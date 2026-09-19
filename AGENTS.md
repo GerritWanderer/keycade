@@ -13,7 +13,7 @@ Welcome to **Keycade** (`luneth90/keycade`). This document defines the foundatio
 - **Core Stacks**:
   - **Frontend / UI**: QML (Qt 6.8+ / Quick / Controls 2), running within [Quickshell](https://quickshell.outfoxxed.me/) (`Quickshell.Wayland._ShortcutsInhibitor`).
   - **Backend / Runtime Helpers**: Python 3.12+ scripts located in `bin/` (`keybinds-json`, `app-config-json`, `tmux-keys-json`, `herdr-keys-json`, `state-store`, `bounded-relay`).
-  - **System Integration**: Linux `prctl(PR_SET_PDEATHSIG)`, `libxkbcommon` (base keysym & physical keycode resolution), `hyprctl` (read-only query mode).
+  - **System Integration**: Linux `prctl(PR_SET_PDEATHSIG)`, `hyprctl` (read-only query mode).
   - **Security & Quality**: OpenSSF Scorecard (Target $\ge$ 7.5), OpenSSF Best Practices (Passing Badge), CodeQL SAST, Dependabot, Atheris fuzz testing.
 
 ---
@@ -65,7 +65,7 @@ R1–R8 are non-negotiable security invariants established during the Omarchy ma
 | **R4** | **Prototype Safety** | Prevent JS prototype pollution. Never copy external keys into `{}`. Use `Object.create(null)` for dynamic lookups and reject `__proto__`, `constructor`, and `prototype`. |
 | **R5** | **Plain Text Dynamic UI** | All dynamic or external text must use `SafeText` with `Text.PlainText`, strip ANSI escape codes and terminal controls, and enforce visual layout/length boundaries. |
 | **R6** | **Standard Packaging Only** | No custom clone-and-run installers (`install.sh`, `setup.py`, `git pull`). Strictly follow the official Omarchy plugin lifecycle (`omarchy plugin add/update/remove`). |
-| **R7** | **Hermetic & Trusted Binaries** | No reliance on ambient `PATH` or `#!/usr/bin/env`. Commands and dynamic libraries (`libc.so.6`, `libxkbcommon.so`) must use absolute paths verified by `trusted_command()` (root-owned, non-writable). Subprocesses run in a sanitized whitelist environment. |
+| **R7** | **Hermetic & Trusted Binaries** | No reliance on ambient `PATH` or `#!/usr/bin/env`. Commands and dynamic libraries (`libc.so.6`) must use absolute paths verified by `trusted_command()` (root-owned, non-writable). Subprocesses run in a sanitized whitelist environment. |
 | **R8** | **Incremental Consumption & Process Reaping** | QML stream consumers must bound inputs incrementally on arrival (not retain full stream before checking). Teardown must terminate the entire process group (`setsid` + `PR_SET_PDEATHSIG` + fallback SIGKILL). |
 
 ---
@@ -113,7 +113,7 @@ Follow Conventional Commits:
 [optional body explaining rationale and invariant reviews]
 ```
 Examples:
-- `fix(keymap): validate base keysym against root-owned include paths`
+- `fix(helper): pin compositor query to a root-owned absolute path`
 - `test(fuzz): add Atheris fuzz harness for keybinding parsers`
 - `docs: update review invariants checklist for issue #1`
 
