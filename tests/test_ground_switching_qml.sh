@@ -172,9 +172,9 @@ import json, sys
 from pathlib import Path
 settings = json.loads(Path(sys.argv[1]).read_text("utf-8"))
 assert settings["excludedBindings"] == ["tmux:prefix/x"], settings
-# Registry pruning falls back to the only reachable supply for this selector.
-# It is a preference, not history: the foreign exclusion above stays verbatim.
-assert settings["activeProfile"] == "lazyvim", settings
+# Every historical selector maps to all; foreign exclusions stay verbatim.
+assert settings["schemaVersion"] == 4 and settings["activeDeck"] == "all", settings
+assert "activeProfile" not in settings and settings["deckCards"] == {}, settings
 PY
 
 printf 'single-supply ground-loading QML integration test passed\n'

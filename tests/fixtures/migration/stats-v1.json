@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "runs": 9,
+  "bindings": {
+    "64|Q|killactive|": {
+      "hits": 3,
+      "misses": 1,
+      "guidedHits": 1,
+      "lastSeen": 42,
+      "attempts": [
+        {
+          "guided": true,
+          "correct": true,
+          "reactionMs": 1000
+        },
+        {
+          "guided": false,
+          "correct": true,
+          "reactionMs": 800
+        },
+        {
+          "guided": false,
+          "correct": false
+        },
+        {
+          "guided": false,
+          "correct": true,
+          "reactionMs": 700
+        }
+      ]
+    }
+  }
+}

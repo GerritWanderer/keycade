@@ -4,7 +4,7 @@ import Quickshell.Io
 import "Stats.js" as Stats
 import "Session.js" as Session
 import "Palettes.js" as Palettes
-import "Profiles.js" as Profiles
+import "DeckState.js" as DeckState
 
 Item {
   id: root
@@ -39,6 +39,13 @@ Item {
   property var settings: defaultSettings()
   property var session: null
   property bool ready: false
+  // Declaration context is asynchronous. Keep only the bounded raw stats
+  // text until it arrives; never prune or write an assumed all-only view.
+  property var declaredDeckIds: null
+  property var pendingStatsRaw: null
+  property bool statsSavePending: false
+  property bool runIdentityPrepared: false
+  property string deckCardsRefusal: ""
   property bool statsLoaded: false
   property bool settingsLoaded: false
   property bool sessionLoaded: false
@@ -52,10 +59,11 @@ Item {
   property bool operationTimedOut: false
 
   signal failed(string message)
+  signal deckCardsRefused(string reason)
 
   function defaultSettings() {
     return {
-      schemaVersion: 3,
+      schemaVersion: 4,
       locale: "en",
       theme: Palettes.defaultName(),
       reducedMotion: false,
@@ -63,9 +71,8 @@ Item {
       countdownSound: true,
       soundVolume: 0.4,
       excludedBindings: [],
-      // The ground a run is played on. Configurable keys are read from the
-      // application being trained and are deliberately not duplicated here.
-      activeProfile: Profiles.defaultId()
+      activeDeck: "all",
+      deckCards: DeckState.map()
     }
   }
 
@@ -86,23 +93,68 @@ Item {
         : source.feedbackSound === true
     result.countdownSound = source.countdownSound === undefined ? true : source.countdownSound === true
     result.soundVolume = root.finiteNumber(source.soundVolume, 0.4, 0, 1)
-    // The field is new in this schema version but the version stays at 3: a
-    // bump would make an older Keycade reject the whole file and quarantine
-    // every setting, while staying put only costs it the exclusions.
+    // Exclusions remain profile:localId, including retired namespaces (D10).
     result.excludedBindings = Session.excludedList(source.excludedBindings)
-    result.activeProfile = Profiles.known(source.activeProfile)
-        ? String(source.activeProfile) : Profiles.defaultId()
+    result.activeDeck = source.schemaVersion === 4 && DeckState.validId(source.activeDeck)
+        ? source.activeDeck : "all"
+    result.deckCards = source.schemaVersion === 4
+        ? DeckState.normalize(source.deckCards) : DeckState.map()
     if (Number(source.schemaVersion) === 2 && Math.abs(result.soundVolume - 0.3) < 0.001)
       result.soundVolume = 0.4
     return result
   }
 
   function updateReady() {
-    root.ready = root.statsLoaded && root.settingsLoaded && root.sessionLoaded && !root.error
+    var loaded = root.statsLoaded && root.settingsLoaded && root.sessionLoaded
+    if (loaded && !root.error && !root.runIdentityPrepared) {
+      try {
+        var before = root.stats.runSequence
+        // Session.runId remains the persisted numeric identity. Reserve even
+        // an unresumable/abandoned legacy LazyVim session, never a foreign one.
+        if (root.session && root.session.profileId === "lazyvim")
+          Stats.adoptRunIdentity(root.stats, root.session.runId)
+        root.runIdentityPrepared = true
+        if (before !== root.stats.runSequence) {
+          root.stats = Object.assign({}, root.stats)
+          root.statsSavePending = true
+        }
+      } catch (identityError) {
+        root.fail("Run identity is invalid or exhausted")
+      }
+    }
+    root.ready = loaded && root.runIdentityPrepared && !root.error
+    if (root.ready && root.statsSavePending) Qt.callLater(function() { root.saveStats() })
+  }
+
+  function setDeclaredDeckIds(ids) {
+    // This interface consumes the final config result, not a temporary loading
+    // fallback. Invalid IDs cannot replace a previously accepted declaration.
+    var declared = DeckState.declaredIds(ids)
+    root.declaredDeckIds = declared
+    if (root.pendingStatsRaw !== null) {
+      var raw = root.pendingStatsRaw
+      root.pendingStatsRaw = null
+      root.loadStats(raw)
+    } else if (root.statsLoaded) {
+      var reconciled = Stats.migrate(root.stats, declared)
+      if (JSON.stringify(reconciled) !== JSON.stringify(root.stats)) {
+        root.stats = reconciled
+        root.statsSavePending = true
+      }
+    }
+    if (root.statsSavePending && root.statsLoaded) root.saveStats()
   }
 
   function loadStats(raw) {
     var text = String(raw || "").trim()
+    if (DeckState.utf8Bytes(text) > root.fileLimits.stats) {
+      root.fail("stats state exceeded its limit")
+      return
+    }
+    if (root.declaredDeckIds === null) {
+      root.pendingStatsRaw = text
+      return
+    }
     if (!text) {
       root.stats = Stats.defaults()
       root.statsCorrupt = false
@@ -111,9 +163,10 @@ Item {
         var value = JSON.parse(text)
         if (!Stats.valid(value)) throw new Error("unsupported stats schema")
         var previousSchema = Number(value.schemaVersion || 0)
-        root.stats = Stats.migrate(value)
+        root.stats = Stats.migrate(value, root.declaredDeckIds)
         root.statsCorrupt = false
-        if (previousSchema !== root.stats.schemaVersion)
+        if (previousSchema !== root.stats.schemaVersion
+            || JSON.stringify(value) !== JSON.stringify(root.stats))
           Qt.callLater(function() { root.saveStats() })
       } catch (loadError) {
         root.stats = Stats.defaults()
@@ -124,6 +177,7 @@ Item {
     }
     root.statsLoaded = true
     root.updateReady()
+    if (root.statsSavePending) Qt.callLater(function() { root.saveStats() })
   }
 
   function loadSettings(raw) {
@@ -135,7 +189,8 @@ Item {
       try {
         var value = JSON.parse(text)
         if (!value || typeof value !== "object" || Array.isArray(value)
-            || [1, 2, 3].indexOf(value.schemaVersion) === -1)
+            || [1, 2, 3, 4].indexOf(value.schemaVersion) === -1
+            || DeckState.utf8Bytes(text) > root.fileLimits.settings)
           throw new Error("unsupported settings schema")
         var previousSchema = Number(value.schemaVersion)
         root.settings = root.normalizedSettings(value)
@@ -144,7 +199,8 @@ Item {
         // normalizedSettings and removed from disk so a stale value can never
         // mask configuration detected later.
         if (previousSchema !== root.settings.schemaVersion
-            || Object.prototype.hasOwnProperty.call(value, "profileOptions"))
+            || Object.prototype.hasOwnProperty.call(value, "profileOptions")
+            || Object.prototype.hasOwnProperty.call(value, "activeProfile"))
           Qt.callLater(function() { root.saveSettings() })
       } catch (loadError) {
         root.settings = root.defaultSettings()
@@ -163,7 +219,15 @@ Item {
     root.sessionCorrupt = false
     if (text) {
       try {
-        var value = Session.sanitize(JSON.parse(text))
+        var input = JSON.parse(text)
+        // The legacy sanitizer clamps counters. That must not turn a hostile
+        // session identity into a reused valid ID before reservation.
+        // Reject through the nonfatal session quarantine path. An invalid ID
+        // is never adopted or clamped, and must not latch a storage failure
+        // which would prevent that queued quarantine from ever running.
+        if (input && input.profileId === "lazyvim" && !Stats.validRunId(input.runId))
+          throw new Error("invalid run identity")
+        var value = Session.sanitize(input)
         if (!value) throw new Error("unsupported session schema")
         root.session = value
       } catch (loadError) {
@@ -262,8 +326,8 @@ Item {
       root.fail("State serialization failed")
       return
     }
-    var characterLimits = { stats: 2 * 1024 * 1024, settings: 64 * 1024, session: 512 * 1024 }
-    if (payload.length > characterLimits[kind]) {
+    // The helper also counts the terminating newline in its stdin budget.
+    if (DeckState.utf8Bytes(payload) + 1 > root.fileLimits[kind]) {
       root.fail(kind + " state exceeded its limit")
       return
     }
@@ -271,18 +335,61 @@ Item {
   }
 
   function saveStats() {
-    root.stats = Stats.migrate(root.stats)
+    if (root.declaredDeckIds === null || !root.statsLoaded || !root.runIdentityPrepared) {
+      root.statsSavePending = true
+      return
+    }
+    root.statsSavePending = false
+    root.stats = Stats.migrate(root.stats, root.declaredDeckIds)
     root.enqueueWrite("stats", root.stats, root.statsCorrupt)
     root.statsCorrupt = false
   }
 
   function saveSettings() {
-    root.settings = root.normalizedSettings(root.settings)
-    root.enqueueWrite("settings", root.settings, root.settingsCorrupt)
-    root.settingsCorrupt = false
+    try {
+      root.settings = root.normalizedSettings(root.settings)
+      root.enqueueWrite("settings", root.settings, root.settingsCorrupt)
+      root.settingsCorrupt = false
+    } catch (settingsError) {
+      root.fail("Settings state was invalid")
+    }
+  }
+
+  // Atomic, nonfatal curation boundary for the later drawer. A rejected edit
+  // never changes settings, queues a write, or evicts old/undeclared deltas.
+  function setDeckCard(deckId, cardId, action) {
+    var next
+    try {
+      if (!root.ready) throw new Error("state-not-ready")
+      next = root.normalizedSettings(root.settings)
+      next.deckCards = DeckState.change(root.settings.deckCards, deckId, cardId, action)
+      if (DeckState.serializedBytes(next) + 1 > root.fileLimits.settings)
+        throw new Error("settings-limit")
+    } catch (mutationError) {
+      var reason = String(mutationError.message || "invalid-deck-cards")
+      root.deckCardsRefusal = ["deck-cards-limit", "invalid-deck-cards", "settings-limit",
+                              "state-not-ready"].indexOf(reason) !== -1
+          ? reason : "invalid-deck-cards"
+      root.deckCardsRefused(root.deckCardsRefusal)
+      return false
+    }
+    root.deckCardsRefusal = ""
+    root.settings = next
+    root.saveSettings()
+    return true
   }
 
   function saveSession(value) {
+    if (value && value.profileId === "lazyvim") {
+      try {
+        var before = root.stats.runSequence
+        Stats.adoptRunIdentity(root.stats, value.runId)
+        if (before !== root.stats.runSequence) root.saveStats()
+      } catch (identityError) {
+        root.fail("Run identity is invalid or exhausted")
+        return
+      }
+    }
     root.session = Session.sanitize(value)
     if (!root.session) {
       root.clearSession()
@@ -359,7 +466,7 @@ Item {
       if (typeof record.data !== "string") throw new Error("invalid state chunk")
       var existing = String(root.loadFiles[record.kind])
       var addition = String(record.data)
-      if (existing.length + addition.length > root.fileLimits[record.kind])
+      if (DeckState.utf8Bytes(existing + addition) > root.fileLimits[record.kind])
         throw new Error("state file exceeded its limit")
       root.loadFiles[record.kind] = existing + addition
       root.loadChunksLeft -= 1

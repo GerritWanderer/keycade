@@ -268,7 +268,7 @@ TestCase {
     compare(Stats.addTrainingTime(stats, "hyprland", 654321), 654321)
     compare(Stats.addTrainingTime(stats, "hyprland", -10), 654321)
     var migrated = Stats.migrate(stats)
-    compare(migrated.schemaVersion, 4)
+    compare(migrated.schemaVersion, 5)
     var migratedCounters = Stats.counters(migrated, "hyprland")
     compare(migratedCounters.totalTrainingMs, 654321)
     compare(migratedCounters.firstMasteryAt, 12345)
@@ -294,11 +294,11 @@ TestCase {
     // Reading never creates a record: activeRunId is a binding on the stats
     // object, and a read that wrote would mutate state from inside a binding.
     compare(Stats.counters(stats, "tmux").runs, 0)
-    compare(stats.profiles["tmux"], undefined)
-    // A name outside the profile character set is refused outright.
+    compare(stats.decks["tmux"], undefined)
+    // A name outside the deck character set is refused outright.
     compare(Stats.completeRun(stats, "__proto__"), 1)
-    compare(stats.profiles["__proto__"], undefined)
-    compare(Object.keys(stats.profiles).length, 2)
+    compare(stats.decks["__proto__"], undefined)
+    compare(Object.keys(stats.decks).length, 2)
   }
 
   function test_qualifiedIdsCarryTheirProfileAndKeepTheLocalPart() {
@@ -364,9 +364,9 @@ TestCase {
         }
       }
     })
-    compare(migrated.schemaVersion, 4)
+    compare(migrated.schemaVersion, 5)
     var counters = Stats.counters(migrated, "hyprland")
-    compare(counters.runs, 9)
+    compare(counters.runs, 0) // retired counters never become all's progress
     compare(counters.totalTrainingMs, 0)
     compare(counters.firstMasteryAt, 0)
     verify(!counters.firstMasteryCelebrated)
@@ -377,7 +377,7 @@ TestCase {
     compare(migrated.bindings["hyprland/one"].successfulRuns.length, 0)
     compare(migrated.bindings.one, undefined)
     compare(migrated.bindings["lazyvim/one"], undefined)
-    compare(migrated.profiles.lazyvim, undefined)
+    compare(Object.keys(migrated.decks).length, 0)
   }
 
   function test_v2StatsPreserveProgressAndGainMilestoneDefaults() {
@@ -398,14 +398,14 @@ TestCase {
         }
       }
     })
-    compare(migrated.schemaVersion, 4)
+    compare(migrated.schemaVersion, 5)
     var counters = Stats.counters(migrated, "hyprland")
-    compare(counters.runs, 12)
-    compare(counters.coverageCursor, 8)
+    compare(counters.runs, 0)
+    compare(counters.coverageCursor, 0)
     compare(migrated.bindings["hyprland/one"].state, "mastered")
     compare(migrated.bindings["hyprland/one"].firstTryCorrect, 5)
     compare(migrated.bindings["lazyvim/one"], undefined)
-    compare(migrated.profiles.lazyvim, undefined)
+    compare(Object.keys(migrated.decks).length, 0)
     compare(counters.totalTrainingMs, 0)
     compare(counters.firstMasteryAt, 0)
     compare(counters.firstMasteryRun, 0)
@@ -439,14 +439,15 @@ TestCase {
         }
       }
     })
-    compare(migrated.schemaVersion, 4)
+    compare(migrated.schemaVersion, 5)
     var counters = Stats.counters(migrated, "hyprland")
-    compare(counters.runs, 12)
-    compare(counters.coverageCursor, 8)
-    compare(counters.totalTrainingMs, 654321)
-    compare(counters.firstMasteryAt, 12345)
-    compare(counters.firstMasteryRun, 7)
-    verify(counters.firstMasteryCelebrated)
+    compare(counters.runs, 0)
+    compare(counters.coverageCursor, 0)
+    compare(counters.totalTrainingMs, 0)
+    compare(counters.firstMasteryAt, 0)
+    compare(counters.firstMasteryRun, 0)
+    verify(!counters.firstMasteryCelebrated)
+    compare(Object.keys(migrated.decks).length, 0)
 
     var entry = migrated.bindings["hyprland/" + localId]
     compare(Profiles.localOf("hyprland/" + localId), localId)
@@ -458,12 +459,12 @@ TestCase {
 
     // Migrating the result again is a no-op rather than a second prefix.
     var again = Stats.migrate(migrated)
-    compare(again.schemaVersion, 4)
-    compare(Stats.counters(again, "hyprland").runs, 12)
+    compare(again.schemaVersion, 5)
+    compare(Stats.counters(again, "hyprland").runs, 0)
     compare(again.bindings["hyprland/" + localId].firstTryCorrect, 5)
     compare(again.bindings["hyprland/hyprland/" + localId], undefined)
     compare(again.bindings["lazyvim/" + localId], undefined)
-    compare(again.profiles.lazyvim, undefined)
+    compare(again.decks.all, undefined)
   }
 
   // The longest id a source can mint still migrates: the local part is bounded
@@ -484,46 +485,25 @@ TestCase {
     compare(sanitized.cards[0].bindingId, "hyprland/" + localId)
   }
 
-  // A v4 entry naming no readable ground cannot be loaded by any profile, so
-  // it is dropped rather than guessed at.
-  // The cabinet row shows every ground's standing, and only the ground you are
-  // standing at can be counted: the other two read the machine through a
-  // subprocess, and a pack's eligible set turns on exclusions and on which
-  // extras are switched on. So each ground records what it counted, and a
-  // ground that has never been opened has to stay a dash rather than become a
-  // zero that looks like "nothing mastered here".
-  function test_aGroundRecordsWhatItCountedForTheCabinetsToRead() {
-    var stats = Stats.migrate({ schemaVersion: 4, bindings: {}, profiles: {} })
-    compare(Stats.counters(stats, "tmux").knownTotal, 0)
-    compare(Stats.counters(stats, "tmux").knownMastered, 0)
-
-    compare(Stats.noteProgress(stats, "tmux", 7, 86), true)
-    compare(Stats.counters(stats, "tmux").knownMastered, 7)
-    compare(Stats.counters(stats, "tmux").knownTotal, 86)
-    // Nothing moved, so nothing is written: the file is not rewritten to say
-    // the same thing again.
-    compare(Stats.noteProgress(stats, "tmux", 7, 86), false)
-    compare(Stats.noteProgress(stats, "tmux", 8, 86), true)
-
-    // One ground's standing is not another's.
-    compare(Stats.counters(stats, "vim").knownTotal, 0)
-    Stats.noteProgress(stats, "vim", 2, 109)
-    compare(Stats.counters(stats, "tmux").knownTotal, 86)
-    compare(Stats.counters(stats, "vim").knownTotal, 109)
-
-    // A hand-edited file cannot claim more mastered than it counted.
-    var edited = Stats.migrate({
-      schemaVersion: 4, bindings: {},
-      profiles: { tmux: { knownTotal: 10, knownMastered: 99 } }
-    })
-    compare(Stats.counters(edited, "tmux").knownMastered, 10)
-
-    // And a file written before this existed reads as "never opened".
-    var older = Stats.migrate({
-      schemaVersion: 4, bindings: {}, profiles: { tmux: { runs: 3 } }
-    })
-    compare(Stats.counters(older, "tmux").runs, 3)
-    compare(Stats.counters(older, "tmux").knownTotal, 0)
+  // Progress is now derived from the current corpus rather than stale counts
+  // recorded by a ground. Excluding a card changes only that denominator.
+  function test_progressIsComputedWithoutPersistingKnownTotals() {
+    var stats = Stats.migrate({ schemaVersion: 4,
+      bindings: { "lazyvim/one": { state: "mastered" }, "lazyvim/two": { state: "learning" } },
+      profiles: { lazyvim: { runs: 3, knownTotal: 10, knownMastered: 99 } } })
+    var both = Stats.counts(stats, [{ id: "lazyvim/one" }, { id: "lazyvim/two" }], 1, 4)
+    compare(both.total, 2)
+    compare(both.mastered, 1)
+    var filtered = Stats.counts(stats, [{ id: "lazyvim/one" }], 1, 4)
+    compare(filtered.total, 1)
+    compare(filtered.mastered, 1)
+    compare(Stats.counts(stats, [], 1, 4).total, 0)
+    compare(Stats.counters(stats, "all").runs, 3)
+    compare(Stats.counters(stats, "all").knownTotal, undefined)
+    compare(Stats.counters(stats, "all").knownMastered, undefined)
+    var saved = Stats.migrate(stats)
+    compare(saved.decks.all.knownTotal, undefined)
+    compare(saved.bindings["lazyvim/two"].state, "learning")
   }
 
   function test_foreignHistorySurvivesWithoutContributingToLazyvim() {
@@ -540,7 +520,7 @@ TestCase {
     var migrated = Stats.parse(before)
     compare(JSON.stringify(migrated), before)
     compare(Object.getPrototypeOf(migrated.bindings), null)
-    compare(Object.getPrototypeOf(migrated.profiles), null)
+    compare(Object.getPrototypeOf(migrated.decks), null)
     compare(Stats.runsOf(migrated, "lazyvim"), 0)
     var active = [{ id: "lazyvim/normal/a:b/c" }]
     compare(Stats.aggregate(migrated, active).attempts, 0)
@@ -565,10 +545,10 @@ TestCase {
       profiles: { hyprland: { runs: 3 }, "__proto__": { runs: 9 }, "Nope": { runs: 9 } },
       bindings: { "hyprland/kept": { state: "learning" }, "orphan": { state: "learning" } }
     })
-    compare(Stats.counters(migrated, "hyprland").runs, 3)
-    compare(migrated.profiles["__proto__"], undefined)
-    compare(migrated.profiles["Nope"], undefined)
-    compare(Object.keys(migrated.profiles).length, 1)
+    compare(Stats.counters(migrated, "hyprland").runs, 0)
+    compare(migrated.decks["__proto__"], undefined)
+    compare(migrated.decks["Nope"], undefined)
+    compare(Object.keys(migrated.decks).length, 0)
     compare(migrated.bindings["hyprland/kept"].state, "learning")
     compare(migrated.bindings["orphan"], undefined)
   }
@@ -578,7 +558,7 @@ TestCase {
     var migrated = Stats.migrate(source)
     compare(migrated.bindings["__proto__"], undefined)
     compare(migrated.bindings["hyprland/__proto__"], undefined)
-    compare(Stats.counters(migrated, "hyprland").runs, 1000000000)
+    compare(Object.keys(migrated.decks).length, 0)
     compare(migrated.bindings["hyprland/safe"].firstTryAttempts, 1000000000)
     compare(migrated.bindings["hyprland/safe"].firstTryCorrect, 1000000000)
   }

@@ -104,10 +104,11 @@ ShellRoot {
     }
   }
 
-  function checkSaved(round, runId) {
+  function checkSaved(round, runNumber, identity) {
+    check(round + " internal identity", overlay.activeRunId, identity)
     check(round + " resumeAvailable", overlay.resumeAvailable, true)
     check(round + " canResume", overlay.hasResumableSession(), true)
-    check(round + " runNumber", overlay.runNumber, runId)
+    check(round + " runNumber", overlay.runNumber, runNumber)
     check(round + " progress", overlay.completedCardCount(), 5)
     check(round + " runReviewTarget", overlay.runReviewTarget, 4)
     check(round + " runNewTarget", overlay.runNewTarget, 6)
@@ -137,7 +138,7 @@ ShellRoot {
       }
       if (overlay.groundLoading) return
       if (phase === 1) {
-        checkSaved("initial", 3)
+        checkSaved("initial", 3, 3)
         // Deliberately stale run-local values must be replaced by the saved
         // run on the next load, not leak into the home-screen header.
         overlay.newLearned = 9
@@ -154,7 +155,7 @@ ShellRoot {
         check("cabinet keeps its number", overlay.groundProgressLabel("lazyvim"), "7/" + expectedTotal)
         phase = 2
       } else if (phase === 2) {
-        checkSaved("reloaded", 3)
+        checkSaved("reloaded", 3, 3)
         // Finishing consumes the saved run and advances the reactive run id.
         // Adopting home state afterwards must clear every run-local tally.
         overlay.finishRun(false)
@@ -173,7 +174,13 @@ ShellRoot {
         check("fresh masteredGained", overlay.masteredGained, 0)
         check("fresh reactions", overlay.reactions.length, 0)
         check("fresh results", Object.keys(overlay.runResults).length, 0)
-        // Simulate an interrupted fourth run without activating InputGuard.
+        // Abandon one newly reserved session without completing it, then
+        // restart: visible run 4 must use identity 5, never reuse identity 4.
+        check("new identity", overlay.allocateSessionIdentity(), 4)
+        check("abandoned restart identity", overlay.allocateSessionIdentity(), 5)
+        check("abandon leaves display counters alone", overlay.profileCounters().runs, 3)
+        check("display independent of identity", overlay.runNumber, 4)
+        // Simulate the interrupted run without activating InputGuard.
         // leaveRun must retain the exact remaining cards, score and correction.
         overlay.deck = overlay.eligibleBindings.slice(0, 6).map(function(binding) {
           return { binding: binding, tier: "learning", queue: "weak", remedial: false }
@@ -197,7 +204,9 @@ ShellRoot {
         overlay.loadActiveGround()
         phase = 3
       } else {
-        checkSaved("interrupted", 4)
+        checkSaved("interrupted", 4, 5)
+        overlay.adoptRunState()
+        checkSaved("resumed identity unchanged", 4, 5)
         running = false
         done.start()
       }
@@ -237,15 +246,17 @@ root = Path(sys.argv[1])
 state = root / "state/omarchy/keycade"
 session = json.loads((state / "session.json").read_text("utf-8"))
 original = json.loads((root / "session.json").read_text("utf-8"))
-assert session["profileId"] == "lazyvim" and session["runId"] == 4, session
+assert session["profileId"] == "lazyvim" and session["runId"] == 5, session
 for key in ("cards", "offset", "correct", "attempts", "newLearned", "masteredGained",
             "runReviewTarget", "runNewTarget", "pendingReinforcements", "reactions",
             "correctionRequired"):
     assert session[key] == original[key], (key, session)
 stats = json.loads((state / "stats.json").read_text("utf-8"))
 previous = json.loads((root / "stats.json").read_text("utf-8"))
-assert stats["profiles"]["lazyvim"]["runs"] == 3, stats
-assert stats["profiles"]["tmux"] == previous["profiles"]["tmux"], stats
+assert stats["schemaVersion"] == 5 and stats["decks"]["all"]["runs"] == 3, stats
+assert stats["runSequence"] == 5, stats
+assert "profiles" not in stats and "tmux" not in stats["decks"], stats
+assert "knownTotal" not in stats["decks"]["all"], stats
 for binding, entry in previous["bindings"].items():
     assert stats["bindings"][binding] == entry, (binding, stats["bindings"][binding])
 # Counting the corpus may materialize fresh unseen entries, never progress.

@@ -33,7 +33,7 @@ cat > "$test_root/settings.json" <<'JSON'
 {"schemaVersion":3,"locale":"en","activeProfile":"lazyvim","feedbackSound":false,"countdownSound":false}
 JSON
 cat > "$test_root/session.json" <<'JSON'
-{"schemaVersion":1,"profileId":"lazyvim","runId":2,"offset":0,"cards":[{"bindingId":"lazyvim/test","tier":"learning","queue":"due","remedial":false}],"correct":0,"attempts":0,"newLearned":0,"masteredGained":0,"runReviewTarget":1,"runNewTarget":0,"pendingReinforcements":[],"reactions":[],"runResults":{},"correctionRequired":false,"savedAt":1}
+{"schemaVersion":1,"profileId":"lazyvim","runId":17,"offset":0,"cards":[{"bindingId":"lazyvim/test","tier":"learning","queue":"due","remedial":false}],"correct":0,"attempts":0,"newLearned":0,"masteredGained":0,"runReviewTarget":1,"runNewTarget":0,"pendingReinforcements":[],"reactions":[],"runResults":{},"correctionRequired":false,"savedAt":1}
 JSON
 
 for kind in stats settings session; do
@@ -107,6 +107,10 @@ ShellRoot {
       pendingCounters.firstMasteryRun = 1
       pendingCounters.firstMasteryCelebrated = false
       overlay.eligibleBindings = [finalBinding, incompleteBinding]
+      overlay.resumeAvailable = overlay.hasResumableSession()
+      overlay.adoptRunState()
+      check("legacy session identity adopted", overlay.activeRunId, 17)
+      check("deck-local displayed run", overlay.runNumber, 2)
       overlay.view = "playing"
       overlay.refreshProgressCounts()
       check("incomplete total", overlay.progressCounts.total, 2)
@@ -128,7 +132,7 @@ ShellRoot {
         { binding: finalBinding, tier: "maintenance", queue: "maintenance", remedial: false }
       ]
       overlay.cardIndex = 0
-      overlay.runNumber = overlay.activeRunId
+      overlay.runNumber = overlay.nextRunNumber
       overlay.cardStartedAt = Date.now() - 500
       overlay.activeSegmentStartedAt = Date.now() - 1000
       overlay.view = "playing"
@@ -190,8 +194,10 @@ import json, sys
 from pathlib import Path
 stats = json.loads(Path(sys.argv[1]).read_text("utf-8"))
 entry = stats["bindings"]["lazyvim/test"]
-counters = stats["profiles"]["lazyvim"]
-assert entry["state"] == "mastered" and entry["successfulRuns"] == [1, 2], entry
+assert stats["schemaVersion"] == 5 and "profiles" not in stats, stats
+counters = stats["decks"]["all"]
+assert entry["state"] == "mastered" and entry["successfulRuns"] == [1, 17], entry
+assert stats["runSequence"] == 17, stats
 assert counters["runs"] == 2 and counters["firstMasteryRun"] == 2, counters
 assert counters["firstMasteryCelebrated"] and counters["firstMasteryAt"] > 0, counters
 assert counters["totalTrainingMs"] >= 2000, counters

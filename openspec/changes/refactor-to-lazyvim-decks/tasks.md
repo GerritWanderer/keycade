@@ -18,9 +18,9 @@
 
 ## 3. State Store and Schema Migrations
 
-- [ ] 3.1 Migrate `lib/StateStore.qml` settings schema from version 3 to 4, renaming `activeProfile` to `activeDeck` (default `"all"`) and adding bounded `deckCards` mapping (capped at 24 KiB, additions refused and surfaced at the cap), verifying migration on synthetic schema 3 fixtures
-- [ ] 3.2 Migrate `lib/Stats.js` schema from version 4 to 5, mapping `profiles["lazyvim"]` to `decks["all"]`, discarding legacy profiles, raising the deck counter cap from `MAX_PROFILES: 16` to 48 with deterministic orphan pruning, and discontinuing `knownTotal`/`knownMastered` disk writes, verifying unit tests in `tests/test_stats.py`
-- [ ] 3.3 Ensure foreign-prefix bindings and orphaned deck deltas are retained inertly (D10), verifying via state store load tests
+- [x] 3.1 Migrate `lib/StateStore.qml` settings schema from version 3 to 4, renaming `activeProfile` to `activeDeck` (default `"all"`) and adding bounded `deckCards` mapping (capped at 24 KiB, additions refused and surfaced at the cap), verifying migration on synthetic schema 3 fixtures
+- [x] 3.2 Migrate `lib/Stats.js` schema from version 4 to 5, mapping `profiles["lazyvim"]` to `decks["all"]`, discarding legacy profiles, raising the deck counter cap from `MAX_PROFILES: 16` to 48 with deterministic orphan pruning, and discontinuing `knownTotal`/`knownMastered` disk writes, verifying unit tests in `tests/test_stats.py`
+- [x] 3.3 Ensure foreign-prefix bindings and orphaned deck deltas are retained inertly (D10), verifying via state store load tests
 
 ## 4. Dynamic Deck Evaluation and Scheduler Adaptation
 

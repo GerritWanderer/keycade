@@ -99,9 +99,11 @@ Item {
   // Read-only readiness for non-interactive tooling; selecting another supply
   // is no longer available as a way to wait for persisted settings.
   readonly property bool stateReady: store.ready
-  // Only the LazyVim supply remains. Ignore retired activeProfile values
-  // without deleting their stored history; state migration is a later step.
+  // The corpus namespace stays LazyVim; current UI counters now belong to all.
+  // Deck selection/engine wiring replaces this temporary adapter in WP5/6.
   readonly property string profileId: "lazyvim"
+  readonly property string deckId: "all"
+  property bool configOpened: false
   readonly property var availableProfiles: ["lazyvim"]
   readonly property var activeSource: packs
   // Long enough to read the stamp, not long enough to feel like a penalty.
@@ -110,7 +112,12 @@ Item {
   readonly property int excludeStampMs: 900
   readonly property int maxOpenPayloadChars: 16 * 1024
   readonly property bool reducedMotion: Boolean(store.settings.reducedMotion)
-  readonly property int activeRunId: Stats.runsOf(store.stats, root.profileId) + 1
+  readonly property int nextRunNumber: Stats.runsOf(store.stats, root.deckId) + 1
+  property int sessionRunIdentity: 0
+  // Display/celebration counters stay deck-local. Scheduling and card history
+  // use the reserved identity (or a read-only preview before a new session).
+  readonly property int activeRunId: root.sessionRunIdentity > 0
+      ? root.sessionRunIdentity : Stats.peekRunIdentity(store.stats)
   readonly property string marketplaceUrl: "https://plugins.omarchy.org/plugin.html?id=luneth90.keycade"
 
   readonly property var themePalette: Palettes.palette(root.themeName)
@@ -156,7 +163,10 @@ Item {
     i18n.locale = root.requestedLocale
         || (i18n.supported.indexOf(savedLocale) !== -1 ? savedLocale : "en")
     guard.begin()
-    root.loadActiveGround()
+    // The cold-load reader was already requested before state readiness;
+    // reuse that result/launch rather than deadlock or launch a second helper.
+    if (root.configOpened || (!appConfig.loading && !appConfig.settled)) root.loadActiveGround()
+    root.configOpened = true
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
@@ -231,8 +241,10 @@ Item {
     guard.requestClose()
   }
 
-  // A pack ground is loaded from data already in memory, so it can only be
-  // asked once persisted settings are loaded and its detected config arrives.
+  // Config must be requested independently of store.ready: its final deck
+  // declarations are what allow StateStore to prune and finish loading stats.
+  Component.onCompleted: root.loadActiveGround()
+
   function loadActiveGround() {
     root.groundLoading = true
     appConfig.profileId = root.profileId
@@ -257,8 +269,9 @@ Item {
     root.themeName = Palettes.supported(store.settings.theme)
         ? String(store.settings.theme) : root.themeName
     root.applyEligibility()
-    root.runNumber = root.activeRunId
+    root.runNumber = root.nextRunNumber
     root.resumeAvailable = hasResumableSession()
+    root.adoptRunState()
     refreshProgressCounts()
     if (!root.settleGround()) return
     root.view = "home"
@@ -445,7 +458,15 @@ Item {
   // Read at each use rather than cached in a property: a training ground's
   // record is created the first time it records anything, and a binding taken
   // before that would keep pointing at a detached copy of the defaults.
-  function profileCounters() { return Stats.counters(store.stats, root.profileId) }
+  function profileCounters() { return Stats.counters(store.stats, root.deckId) }
+
+  // Scheduler still discovers its counter key from the corpus prefix until
+  // WP5. This temporary view shares only all's live record, not foreign state.
+  function schedulerStats() {
+    var counters = Session.safeMap()
+    counters[root.profileId] = Stats.ensureCounters(store.stats, root.deckId)
+    return { bindings: store.stats.bindings, decks: counters }
+  }
 
   function detectedOptions() {
     return appConfig.options || ({})
@@ -459,6 +480,13 @@ Item {
   // The reader answered; calibrate the shipped table with the same extras,
   // literal keymaps and leaders as before. No external table replaces it.
   function applyDetectedConfig() {
+    var config = appConfig.deckConfig
+    var ids = ["all"]
+    if (config.status === "absent") ids = ids.concat(["navigation", "lsp", "search", "git"])
+    else if (config.status === "valid") {
+      for (var index = 0; index < config.decks.length; index++) ids.push(config.decks[index].id)
+    }
+    store.setDeclaredDeckIds(ids)
     packs.profileId = root.profileId
     packs.options = root.profileOptions()
     packs.enabledExtras = appConfig.extras
@@ -489,7 +517,7 @@ Item {
       guard.fail(root.errorMessage)
       return false
     }
-    checkFirstMastery(root.activeRunId)
+    checkFirstMastery(root.nextRunNumber)
     var counters = root.profileCounters()
     if (!root.resumeAvailable && Number(counters.firstMasteryAt || 0) > 0
         && !Boolean(counters.firstMasteryCelebrated)
@@ -517,7 +545,8 @@ Item {
     root.cardIndex = 0
     root.runOffset = session ? Math.max(0, Math.min(root.runCardLimit - 1,
                                                    Number(session.offset || 0))) : 0
-    root.runNumber = session ? Number(session.runId || root.activeRunId) : root.activeRunId
+    root.sessionRunIdentity = session ? session.runId : 0
+    root.runNumber = root.nextRunNumber
     root.correct = session ? Math.max(0, Number(session.correct || 0)) : 0
     root.attempts = session ? Math.max(0, Number(session.attempts || 0)) : 0
     root.newLearned = session ? Math.max(0, Number(session.newLearned || 0)) : 0
@@ -564,28 +593,14 @@ Item {
 
   function refreshProgressCounts() {
     root.progressCounts = Stats.counts(store.stats, root.eligibleBindings, Date.now(), root.activeRunId)
-    // Keep the existing progress record until the later deck-state migration.
-    // The eligible total follows exclusions and the enabled extras.
-    if (store.ready && root.eligibleBindings.length
-        && Stats.noteProgress(store.stats, root.profileId,
-                              root.progressCounts.mastered, root.progressCounts.total)
-        && root.view !== "playing") store.saveStats()
+    // Current progress follows exclusions/extras, never stale written totals.
     root.refreshGroundProgress()
   }
 
-  // Every ground's last known standing, rebuilt as one object so the cabinets
-  // redraw: the statistics are mutated in place, so a delegate bound straight
-  // to them would never hear that they moved.
+  // Rebuild the current corpus standing so the existing UI sees mutations.
+  // The later deck engine computes each deck's progress from this same corpus.
   function refreshGroundProgress() {
-    var ids = root.availableProfiles
     var progress = Session.safeMap()
-    for (var index = 0; index < ids.length; index++) {
-      var counters = Stats.counters(store.stats, ids[index])
-      progress[ids[index]] = {
-        mastered: Number(counters.knownMastered || 0),
-        total: Number(counters.knownTotal || 0)
-      }
-    }
     // Only once this ground has actually counted itself. Mid-switch its
     // eligible set is empty, and writing that here would blink the cabinet
     // through a dash on the way to its real number.
@@ -608,22 +623,22 @@ Item {
 
   function commitActiveTraining() {
     if (root.activeSegmentStartedAt <= 0) return
-    Stats.addTrainingTime(store.stats, root.profileId, Date.now() - root.activeSegmentStartedAt)
+    Stats.addTrainingTime(store.stats, root.deckId, Date.now() - root.activeSegmentStartedAt)
     root.activeSegmentStartedAt = 0
   }
 
-  function checkFirstMastery(runId) {
+  function checkFirstMastery(deckRunNumber) {
     if (root.progressCounts.total <= 0
         || root.progressCounts.mastered !== root.progressCounts.total) return false
-    var reached = Stats.noteFirstMastery(store.stats, root.profileId, Date.now(),
-                                         runId || root.activeRunId)
+    var reached = Stats.noteFirstMastery(store.stats, root.deckId, Date.now(),
+                                         deckRunNumber || root.nextRunNumber)
     if (reached) store.saveStats()
     return reached
   }
 
   function showFirstMastery() {
     root.masterySnapshot = Stats.aggregate(store.stats, root.eligibleBindings)
-    Stats.markFirstMasteryCelebrated(store.stats, root.profileId)
+    Stats.markFirstMasteryCelebrated(store.stats, root.deckId)
     store.saveStats()
     root.view = "mastery"
     sounds.playMastery()
@@ -641,7 +656,7 @@ Item {
     // independently counted model may end the active run.
     if (root.progressCounts.total <= 0
         || root.progressCounts.mastered !== root.progressCounts.total) return false
-    checkFirstMastery(root.activeRunId)
+    checkFirstMastery(root.nextRunNumber)
     var counters = root.profileCounters()
     if (Number(counters.firstMasteryAt || 0) <= 0
         || Boolean(counters.firstMasteryCelebrated)) return false
@@ -654,7 +669,8 @@ Item {
     commitActiveTraining()
     store.clearSession()
     root.resumeAvailable = false
-    Stats.completeRun(store.stats, root.profileId)
+    root.sessionRunIdentity = 0
+    Stats.completeRun(store.stats, root.deckId)
     store.stats = Object.assign({}, store.stats)
     refreshProgressCounts()
     showFirstMastery()
@@ -701,8 +717,29 @@ Item {
   }
 
   function hasResumableSession() {
-    return Session.canResume(store.session, root.activeRunId, root.eligibleBindings,
-                             root.runCardLimit, root.profileId)
+    var session = store.session
+    return Boolean(store.ready && session && Stats.validRunId(session.runId)
+        && session.runId <= Stats.sequenceValue(store.stats.runSequence)
+        && Session.canResume(session, session.runId, root.eligibleBindings,
+                             root.runCardLimit, root.profileId))
+  }
+
+  // Reserve and queue the high-water write before any new session snapshot.
+  // An abandoned deal still consumes its identity; deck counters move only
+  // when a run finishes. WP5/6 supplies the chosen deck independently.
+  function allocateSessionIdentity() {
+    if (!store.ready) return 0
+    try {
+      var identity = Stats.allocateRunIdentity(store.stats)
+      root.sessionRunIdentity = identity
+      store.stats = Object.assign({}, store.stats)
+      store.saveStats()
+      return identity
+    } catch (identityError) {
+      root.errorMessage = "Run identity space is exhausted."
+      guard.fail(root.errorMessage)
+      return 0
+    }
   }
 
   function saveRunSession() {
@@ -719,7 +756,7 @@ Item {
     store.saveSession({
       schemaVersion: 1,
       profileId: root.profileId,
-      runId: root.activeRunId,
+      runId: root.sessionRunIdentity,
       offset: root.runOffset + resumeIndex,
       cards: cards,
       correct: root.correct,
@@ -749,11 +786,18 @@ Item {
       startRun()
       return
     }
+    try {
+      root.sessionRunIdentity = Stats.adoptRunIdentity(store.stats, session.runId)
+    } catch (identityError) {
+      root.errorMessage = "Run identity is invalid."
+      guard.fail(root.errorMessage)
+      return
+    }
     guard.play()
     root.deck = restoredDeck
     root.cardIndex = 0
     root.runOffset = offset
-    root.runNumber = Number(session.runId || root.activeRunId)
+    root.runNumber = root.nextRunNumber
     root.correct = Math.max(0, Number(session.correct || 0))
     root.attempts = Math.max(0, Number(session.attempts || 0))
     root.newLearned = Math.max(0, Number(session.newLearned || 0))
@@ -790,11 +834,12 @@ Item {
       guard.fail("Shortcut inhibition is not active.")
       return
     }
+    if (!root.allocateSessionIdentity()) return
     guard.play()
     store.clearSession()
     root.resumeAvailable = false
-    root.runNumber = root.activeRunId
-    root.deck = Scheduler.build(root.eligibleBindings, store.stats, root.runCardLimit,
+    root.runNumber = root.nextRunNumber
+    root.deck = Scheduler.build(root.eligibleBindings, root.schedulerStats(), root.runCardLimit,
                                 { runId: root.activeRunId, profile: root.profileId })
     var plan = Scheduler.planCounts(root.deck)
     root.runReviewTarget = plan.review
@@ -840,7 +885,7 @@ Item {
     root.lastCountdownBeat = 0
     root.countdownSeconds = 0
     if (root.currentCard.queue === "unseen") {
-      Scheduler.markCovered(root.eligibleBindings, store.stats, root.currentBinding.id)
+      Scheduler.markCovered(root.eligibleBindings, root.schedulerStats(), root.currentBinding.id)
       store.saveStats()
     }
     if (resumeCorrection) {
@@ -1033,13 +1078,13 @@ Item {
     commitActiveTraining()
     store.clearSession()
     root.resumeAvailable = false
-    // The counter lives inside the profile record, so bumping it mutates
+    root.sessionRunIdentity = 0
+    // The counter lives inside the deck record, so bumping it mutates
     // store.stats in place. Reassign anyway: it's a property var, so a plain
-    // mutation never fires statsChanged, and root.activeRunId (a binding
-    // through store.stats) would stay frozen at whatever it last was for the
-    // rest of this keepLoaded session — every following run would reuse the
-    // same stale run number instead of counting up.
-    Stats.completeRun(store.stats, root.profileId)
+    // mutation never fires statsChanged, and root.nextRunNumber (a binding
+    // through store.stats) would stay frozen instead of counting completed
+    // runs. This visible number is deliberately not the scheduling identity.
+    Stats.completeRun(store.stats, root.deckId)
     store.stats = Object.assign({}, store.stats)
     var resultRows = Object.keys(root.runResults).map(function(id) { return root.runResults[id] })
     resultRows.sort(function(left, right) {
@@ -1066,7 +1111,13 @@ Item {
   }
 
   function requestHint(bindingId) {
-    Stats.requestGuidance(store.stats, bindingId)
+    try {
+      Stats.requestGuidance(store.stats, bindingId, root.activeRunId)
+    } catch (identityError) {
+      root.errorMessage = "Run identity space is exhausted."
+      guard.fail(root.errorMessage)
+      return
+    }
     refreshProgressCounts()
     store.saveStats()
   }

@@ -194,3 +194,43 @@ passed independently; Challenger delta PASS, no findings. Catalogs now have 448
 keys each with all live LazyVim and generic strings preserved. After conflict-free
 integration the complete gate passed again (`m2-complete/`). Task 1.6 is complete;
 M1/M2 are closed, and the side lane is removed before WP4 as planned.
+
+## WP4 — state migrations — PASS after correction reviews
+
+- Settings 1–3 migrate to schema 4 with activeDeck all; preferences and foreign
+  exclusions remain intact. `DeckState.js` retains absent-deck/card choices and
+  enforces an exact 24 KiB serialized UTF-8 budget. Over-cap edits refuse
+  atomically with a nonfatal bounded signal/reason, without eviction.
+- Stats 1–4 migrate to schema 5. LazyVim counters move to all, retired counters
+  are dropped, known totals stop being written, and card records/keys remain
+  non-destructive. The WP0 frozen fixtures remain byte-identical.
+- Counter pruning protects declared IDs and deterministically retains at most
+  48 records. StateStore defers migration/pruning/saving until async declarations
+  arrive; minimal startup wiring avoids a readiness/config-request deadlock.
+- User confirmed stable starter IDs: navigation, lsp, search, git (plus all).
+- Challenger identified a global-card/local-counter run-identity collision.
+  User selected a global monotonic sequence and explicitly approved recording
+  the contract, starter IDs and opaque all.seed clarification in design.md.
+  Stats now persists runSequence and exposes allocate/peek/adopt identity APIs.
+  Deck-visible counts and celebration run numbers remain local. Legacy numeric
+  card records survive unchanged; foreign history never advances the sequence.
+- New sessions allocate distinct identities; resume retains the saved identity.
+  StateStore reserves pending LazyVim identities before readiness or any stats
+  save. New allocation stops at MAX_COUNTER minus one, while valid legacy
+  MAX_COUNTER sessions remain resumable; exhaustion never wraps or reuses IDs.
+- A second Challenger finding caught an invalid-session fatal latch that could
+  leave quarantine queued and brick subsequent startups. The latch was removed:
+  invalid identities are not adopted/clamped, the session is cleared, and the
+  real quarantine completes nonfatally. Tests require readiness, unchanged
+  history/sequence, on-disk quarantine and a successful same-directory relaunch
+  under both early and delayed declaration timing.
+- Final orchestrator gate: **165 Python / 73 core QML / 56 reader / 7 guard /
+  22 migration**, fuzz 1000, lint exit 0 (three baseline metadata warnings),
+  strict OpenSpec, diff checks and four isolated Wayland integrations PASS.
+  Challenger accepted the identity contract and returned PASS for the final
+  recovery delta; no remaining findings. Logs: `wp4/`, `wp4-fixed/`, and
+  `/tmp/keycade-lazyvim-decks-gates/wp4-recovery/`.
+- WP5+6 must replace the temporary Keycade.schedulerStats adapter, keep global
+  Session.runId distinct from deck-local display numbers, and use the existing
+  StateStore.setDeclaredDeckIds / setDeckCard interfaces. No new state kind or
+  helper write path was introduced. Tasks 3.1–3.3 are complete.

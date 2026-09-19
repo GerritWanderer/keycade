@@ -6,6 +6,8 @@ ShellRoot {
   id: root
   property bool writeRequested: false
 
+  Component.onCompleted: store.setDeclaredDeckIds(["all"])
+
   StateStore {
     id: store
     onReadyChanged: {

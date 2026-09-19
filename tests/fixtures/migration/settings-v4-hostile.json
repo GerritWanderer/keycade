@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 4,
+  "locale": "zh-CN",
+  "theme": "catppuccin",
+  "reducedMotion": true,
+  "feedbackSound": false,
+  "countdownSound": true,
+  "soundVolume": 0.65,
+  "excludedBindings": [
+    "lazyvim:normal/<leader>ff",
+    "hyprland:64|Q|killactive|",
+    "herdr:default/split",
+    "tmux:prefix/%",
+    "vim:normal/gg",
+    "neovim:normal/gd"
+  ],
+  "activeDeck": "deleted-deck",
+  "deckCards": {
+    "__proto__": {
+      "added": [],
+      "removed": []
+    }
+  }
+}

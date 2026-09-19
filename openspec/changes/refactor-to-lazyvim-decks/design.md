@@ -114,6 +114,10 @@ At `eligible == 0` — an unseeded deck nobody has curated yet — the deck row 
 
 Mastery is unchanged: two consecutive first-try successes in separate runs. A deck is complete when every card in it is mastered, and the celebration fires once per deck, recorded in that deck's counters. A card in two decks contributes to both.
 
+Card history and run-relative scheduling use a bounded, globally monotonic numeric run identity, persisted in the existing stats file. Each new session allocates a fresh identity; resuming an interrupted session reuses its identity. `successfulRuns`, `lastSuccessfulRun` and `dueRun` refer to this global sequence, not the deck-local display counter. Thus `lsp` run 1 and `git` run 1 are distinct successes, and a card due on the next run can be due in another deck. Deck-visible run counts, training time and celebration counters remain deck-local. Exhaustion refuses a new allocation rather than wrapping or reusing an identity.
+
+Migration preserves existing numeric card records unchanged. The sequence is seeded from existing LazyVim counters and history, and an unfinished legacy LazyVim session's identity is reserved before a new session can be allocated. Retired-prefix history remains inert and does not advance the sequence. This adds no state file kind or write path.
+
 No minimum deck size for celebration. The deck is the user's own construction, so a small deck cleared is an accomplishment they defined; a threshold would require explaining why a deck did not celebrate.
 
 `knownTotal` / `knownMastered` are dropped from the written record. They existed because two grounds read the machine through a subprocess and could not be recomputed on the home screen. Seeds evaluate in memory over an already-loaded corpus, so every deck's progress can be computed on demand. The fields are still read for migration and then stop being written.
@@ -136,7 +140,7 @@ Shipped starter decks are compiled in, carrying `nameKey` for localisation the w
 
 *Alternative considered:* merging shipped and user decks. Rejected — a merge needs a hide list and surprises the user with decks they did not declare.
 
-The shipped set is four decks plus the reserved `all`: Navigation (`navigation`, `window`, `buffer`, `tab`), LSP & Diagnostics (`lsp`, `diagnostics`), Search & Find (`search`, `find`) and Git (`git`). They are examples of the seed vocabulary in use, not an attempt at coverage; a user who writes `decks.json` replaces all four.
+The shipped set is four decks plus the reserved `all`: Navigation (`navigation`, `window`, `buffer`, `tab`), LSP & Diagnostics (`lsp`, `diagnostics`), Search & Find (`search`, `find`) and Git (`git`). Their stable deck ids are `navigation`, `lsp`, `search` and `git`, respectively, independent of localized display names. They are examples of the seed vocabulary in use, not an attempt at coverage; a user who writes `decks.json` replaces all four.
 
 ### D12 — Exclusion and per-deck removal stay separate mechanisms
 
@@ -168,7 +172,7 @@ Keeping them separate is what lets D10 stand: exclusions need no migration preci
 
 The deck `id` is the state key, so it is stable across renames — changing `name` preserves curation, changing `id` creates a new deck.
 
-`all` is reserved: undeletable, default, contains every eligible card. If the user declares it, only `name` is honoured and any `seed` is ignored.
+`all` is reserved: undeletable, default, contains every eligible card. If the user declares it, only `name` is honoured and any `seed` is ignored. Its seed is entirely opaque: no traversal or nested rejection accounting is performed. Unknown keys on the deck declaration itself are still ignored and counted.
 
 ### Bounds (R2 — enforced in `read_decks` and independently re-validated in QML)
 
@@ -183,6 +187,7 @@ The deck `id` is the state key, so it is stable across renames — changing `nam
 | `seed.contexts[]` | 8 entries, from the profile's contexts | `Profiles.contexts` |
 | `deckCards` total | 24 KiB within `settings.json` | beside `excludedBindings`' 8 KiB |
 | deck counter records | 48 | replaces `Stats.MAX_PROFILES: 16` |
+| global run sequence | existing `Stats.MAX_COUNTER` bound | numeric card-run history bound; never wrap or reuse |
 
 Unrecognised keys are ignored and counted, following the existing `dropped` / `rejected` convention.
 
@@ -213,7 +218,7 @@ An addition that would carry `deckCards` past its cap is refused and surfaced, l
 ## Migration Plan
 
 1. `settings.json` schemaVersion 3 → 4: `activeProfile` becomes `activeDeck`; any stored value maps to `all`. `excludedBindings` is untouched — foreign-prefix entries are already retained and inert.
-2. `stats.json` schemaVersion 4 → 5: `profiles` becomes `decks`; `profiles["lazyvim"]` becomes `decks["all"]`, preserving runs, training time and mastery; the other five profile records are dropped. `bindings` is untouched, including foreign-prefix entries (D10).
+2. `stats.json` schemaVersion 4 → 5: `profiles` becomes `decks`; `profiles["lazyvim"]` becomes `decks["all"]`, preserving runs, training time and mastery; the other five profile records are dropped. `bindings` is untouched, including foreign-prefix entries (D10). Initialize the bounded global run sequence from LazyVim counters/history and reserve any unfinished legacy LazyVim session identity before allocating a new run (D8); foreign-prefix history does not influence this sequence.
 3. On first launch after the update the user sees the `all` deck with their existing LazyVim progress intact, plus the shipped starter decks, and no `decks.json`.
 4. No rollback path for deck-level counters. Card-level history is preserved under both schemas, so a downgrade loses run counts and celebration flags but no recall history.
 
