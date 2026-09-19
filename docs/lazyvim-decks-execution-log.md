@@ -358,3 +358,59 @@ five QML suites, lint, fuzz 1000, strict validation and diff checks PASS. No tes
 commit was created in that temporary verification tree. The combined pending
 candidate also passed (206 Python plus all QML/integrations); logs:
 `r8-isolated/`, `m6-candidate/`, and `wp8-docs-fixed/` under the gate directory.
+
+## WP8 and final compact-layout corrections — PASS
+
+- Added all frozen deck/home/drawer/refusal copy in English and Simplified
+  Chinese, with parameter parity, bounded/control-free strings and actual
+  bilingual UI tests. Retired groundLabel/noBindings keys were removed; source
+  catalogs and generated Locales match. Runtime behavior was not changed by
+  localization.
+- README files, manifest, agent architecture/test docs and Best Practices
+  descriptive metadata now describe a LazyVim trainer on Omarchy with user
+  decks. Manifest id/version/entrypoints/keepLoaded and MIT license are unchanged.
+  Obsolete ground/physical-layout claims and test paths are gone. CI drops the
+  retired explicit dependencies and executes all five QML suites; pinned action
+  commits, version comments, read-only top-level permission, non-root testing,
+  coverage and fuzzing remain intact.
+- Challenger caught remaining obsolete Omarchy learning screenshots and an
+  unsupported automatic-downgrade promise. The images are no longer linked;
+  each README retains only its accurate LazyVim sequence example. User chose
+  to document downgrade limitations rather than add a new compatibility feature:
+  upgrades retain history, but old releases may reject/quarantine newer schemas
+  and show fresh progress. Backup and recovery guidance is explicit in both
+  READMEs, design and the user-approved roadmap correction.
+- User also confirmed D4's precise distinction: omitted seed means manual-only;
+  explicit empty seed object is unconstrained; only present dimensions union;
+  present empty arrays match nothing. Design and both READMEs now agree with
+  existing reader/engine behavior. New doc tests pin these decisions and images.
+- Orchestrator visual inspection found compact home overflow missed by the first
+  automated UI tests. The owning WP7a worker corrected measured sibling spacing,
+  list allocation and compact controls; Challenger then caught the remaining
+  locked-out branch. Its headline/recovery text now stays visible and fits, with
+  EN/ZH 760×600 tests exercising genuine pack loading/exclusions/eligibility and
+  seven-pixel frame clearance. Empty, resume, locked-out and wide renders were
+  independently inspected; recovery instructions are not hidden or clipped.
+- Separate Challenger verdicts: WP8 correction **PASS**, compact-home correction
+  **PASS**, no remaining findings in either. Final combined orchestrator gate:
+  **206 Python / 73 core QML / 21 deck / 56 reader / 7 guard / 22 migration**,
+  four Wayland integrations, fuzz 1000, lint exit 0 (three baseline warnings),
+  strict validation, locale regeneration and whitespace checks PASS.
+- Logs: `wp8-orchestrator/`, `compact-home-fixed/`,
+  `compact-home-locked-fixed/`, `wp8-docs-fixed/`. Renders remain outside git in
+  `/tmp/keycade-wp8-renders/` and earlier WP7 render directories.
+- Deliberately untouched historical material: unreferenced old screenshot assets
+  and screenshot-tool output filenames/valid schema-3 synthetic settings (the
+  current loader migrates them). No image assets were generated or committed.
+  Tasks 1.8 and 5.3 are complete; WP9 full-change audit is still pending.
+
+### Read-only public compliance evidence
+
+- https://api.scorecard.dev/projects/github.com/luneth90/keycade reported **7.5**
+  for published baseline `80e6b791bc96a5f23d6dedd5fb9d7e7d109921fd` (report date
+  2026-09-14), including Fuzzing, Pinned Dependencies and Token Permissions 10.
+- https://www.bestpractices.dev/en/projects/14452.json reported **Passing / 100%**.
+  The local export's 28-percent derived fields are stale, not a current badge
+  failure; no certification/status fields were fabricated or remotely changed.
+- These are baseline observations, **not** a remote score for the unpublished
+  feature branch. No external issue, PR, remote metadata or repository was changed.

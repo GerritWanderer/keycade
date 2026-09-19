@@ -90,6 +90,6 @@ Order within the milestone:
 
 ## Rollback posture
 
-- Card-level history (`stats.bindings`) survives every step and a downgrade (D10).
+- Upgrades retain card-level history (`stats.bindings`) without deleting retired-prefix records (D10). Older releases may quarantine unsupported schemas; automatic downgrade compatibility is not promised, so back up state before downgrading and retain quarantined files for recovery.
 - Deck-level counters do not survive a downgrade — accepted in `design.md`.
 - If M3's migration misbehaves in the field, the existing StateStore quarantine isolates a corrupt file and the app falls back to `all`, never blocking training.

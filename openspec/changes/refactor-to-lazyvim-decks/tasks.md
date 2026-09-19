@@ -7,7 +7,7 @@
 - [x] 1.5 Prune `lib/Profiles.js` to retain only `lazyvim` profile definition and remove keysym judging paths from `lib/AnswerMatcher.js` and `lib/InputNormalizer.js`, verifying sequence text judging continues to pass tests
 - [x] 1.6 Remove `libxkbcommon` references from `AGENTS.md` and `CLAUDE.md`, and prune unused locale strings from `lib/Locales.js`
 - [x] 1.7 Delete obsolete tests and fixtures — `test_herdr_keys.py`, `test_tmux_keys.py`, the tmux slice of `test_app_config.py`, the non-guard-status cases of `test_keybinds_json.py`, `hyprland_source_smoke.qml`, `test_hyprland_source_qml.sh`, and fixtures `binds.txt`, `devices.txt`, `herdr-keys.txt`, `canonical-keys.js` — verifying `python3 -m unittest discover -s tests -p "test_*.py"` still passes
-- [ ] 1.8 Revise `README.md`, `README.zh-CN.md` and `manifest.json` framing (remove the Keyboard Layouts section, reposition Keycade as a LazyVim trainer running on Omarchy) and sync `.bestpractices.json`, verifying no stale references to removed grounds remain
+- [x] 1.8 Revise `README.md`, `README.zh-CN.md` and `manifest.json` framing (remove the Keyboard Layouts section, reposition Keycade as a LazyVim trainer running on Omarchy) and sync `.bestpractices.json`, verifying no stale references to removed grounds remain
 
 ## 2. Deck Configuration Reader and Hardening
 
@@ -32,7 +32,7 @@
 
 - [x] 5.1 Replace the 2x3 cabinet grid on the Home screen in `Keycade.qml` with a vertical scrollable deck list displaying deck title, card count, mastery indicator, and pinned `all` deck; disable Start on zero-card decks with a bounded hint
 - [x] 5.2 Implement the Browse-and-Pick Drawer in `Keycade.qml` featuring a target deck selector, category/custom/extra filter chips, and per-row membership toggles; the existing in-run exclusion gesture is retained unchanged and deck assignment happens only in this drawer (D12)
-- [ ] 5.3 Add locale keys for the deck list, drawer, and empty-deck hint in `lib/Locales.js` in both languages
+- [x] 5.3 Add locale keys for the deck list, drawer, and empty-deck hint in `lib/Locales.js` in both languages
 - [x] 5.4 Update session progress display in `Keycade.qml` from hardcoded `/ 24` to dynamic `/ sessionSize`
 
 ## 6. Fuzzing, Test Suites, and OpenSSF Verification

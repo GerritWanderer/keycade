@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -21,9 +22,24 @@ ROOT = Path(__file__).resolve().parents[1]
 PACK = json.loads((ROOT / "assets/packs/lazyvim.json").read_text())
 IDS = ["lazyvim/" + card["localId"] for card in PACK["bindings"] if not card["extras"]][:8]
 RENDER_DIR = Path("/tmp/keycade-wp7a-renders")
-EMPTY_HINT = "EMPTY DECK — USE BROWSE ABOVE TO ADD CARDS"
+WP8_RENDER_DIR = Path("/tmp/keycade-wp8-renders")
+# Expected UI copy comes from the shipped catalogs, so these assertions track
+# the actual translations instead of a second hardcoded snapshot of them.
+LOCALES = {path.stem: json.loads(path.read_text(encoding="utf-8"))
+           for path in (ROOT / "assets" / "locales").glob("*.json")}
+EN = LOCALES["en"]
+ZH = LOCALES["zh-CN"]
+EMPTY_HINT = EN["emptyDeckHint"]
 LONG_NAME = "Deck" + "名" * 44  # exactly 48 codepoints, multilingual
 MARKUP_NAME = "<b>Nemesis</b> & <i>marks</i>"
+
+
+def render_copy(locale, key, **values):
+    # Same substitution shape as I18n.t: {field} placeholders, one pass.
+    template = locale[key]
+    for field, value in values.items():
+        template = template.replace("{" + field + "}", str(value))
+    return template
 
 GUARD = '''import QtQuick
 Item {
@@ -103,6 +119,36 @@ Scope {
              name: byName(row, "deckRowName"),
              counts: byName(row, "deckRowCounts"),
              area: byName(row, "deckRowArea") }
+  }
+
+  // Bounds against the decorated home frame itself, not the window: the
+  // frame stays inside the available screen area (HUD above, footer below)
+  // and every named visible item stays inside the frame, margin pixels clear
+  // of its edge (the dotted inner frame sits 7px in, the solid border at 4).
+  function homeBounds(names, margin) {
+    var inset = margin === undefined ? 7 : margin
+    var card = byName(overlay, "screenCard")
+    var area = byName(overlay, "screenArea")
+    check(card && area, "frame selectors")
+    var cardAt = card.mapToItem(area, 0, 0)
+    check(cardAt.x >= 4 && cardAt.y >= 4
+          && cardAt.x + card.width <= area.width - 4
+          && cardAt.y + card.height <= area.height - 4,
+          "home frame within available area: " + cardAt.x + "," + cardAt.y
+          + " " + card.width + "x" + card.height + " of " + area.width + "x" + area.height)
+    var checked = []
+    for (var i = 0; i < names.length; i++) {
+      var item = byName(overlay, names[i])
+      if (!item || !item.visible) continue
+      var pos = item.mapToItem(card, 0, 0)
+      check(pos.x >= inset && pos.y >= inset
+            && pos.x + item.width <= card.width - inset
+            && pos.y + item.height <= card.height - inset,
+            names[i] + " inside home frame: " + pos.x + "," + pos.y + " "
+            + item.width + "x" + item.height + " of " + card.width + "x" + card.height)
+      checked.push(names[i])
+    }
+    return checked
   }
 
   function finish(extra) {
@@ -329,9 +375,9 @@ class DeckHomeUiTests(DeckUiHarness):
           test.check(overlay.startRefusal === "empty-deck" && overlay.startBlocked, "refusal armed")
           var hint = test.byName(overlay, "emptyDeckHint")
           test.check(hint.visible === true, "empty hint visible")
-          test.check(hint.text === "EMPTY DECK — USE BROWSE ABOVE TO ADD CARDS", "hint copy")
+          test.check(hint.text === __EMPTYHINT__, "hint copy")
           var note = test.byName(overlay, "deckConfigNote")
-          test.check(note.visible === true && note.text === "DECKS CONFIG: 2 REJECTED", "rejected count note")
+          test.check(note.visible === true && note.text === __NOTE2__, "rejected count note")
           var start = test.byName(overlay, "startButtonArea")
           test.check(start.enabled === false, "start truly disabled on empty deck")
           test.check(test.byName(overlay, "groundBadge").text === "Empty", "badge shows selected user deck")
@@ -379,7 +425,9 @@ class DeckHomeUiTests(DeckUiHarness):
           test.check(overlay.view === "home", "back home")
         '''.replace("__MARKUP__", json.dumps(MARKUP_NAME))
            .replace("__LONG__", json.dumps(LONG_NAME))
-           .replace("__LIVEID__", json.dumps(IDS[2])))
+           .replace("__LIVEID__", json.dumps(IDS[2]))
+           .replace("__EMPTYHINT__", json.dumps(EN["emptyDeckHint"]))
+           .replace("__NOTE2__", json.dumps(render_copy(EN, "deckConfigRejected", count=2))))
 
     def test_invalid_config_note_and_training_continues(self):
         self.write_raw_decks('{"schemaVersion": 1, "decks": [')
@@ -393,7 +441,7 @@ class DeckHomeUiTests(DeckUiHarness):
           test.check(overlay.deckConfigReason === "invalid-json", "bounded fallback reason")
           var note = test.byName(overlay, "deckConfigNote")
           test.check(note.visible === true
-                     && note.text === "DECKS CONFIG INVALID (invalid-json) — TRAINING ON ALL",
+                     && note.text === __INVALID__,
                      "fallback note: " + note.text)
           var row = test.rowAt(list, 0)
           test.check(row.id === "all" && row.name.text === "All", "all listed with starter name")
@@ -402,7 +450,8 @@ class DeckHomeUiTests(DeckUiHarness):
           test.byName(overlay, "startButtonArea").clicked(null)
           test.check(overlay.view === "playing" && overlay.deck.length > 0, "training on all")
           overlay.leaveRun()
-        ''')
+        '''.replace("__INVALID__", json.dumps(render_copy(EN, "deckConfigInvalid",
+                                                          reason="invalid-json"))))
 
     def render_user_config(self, path):
         decks = [{"id": "zz-first", "name": "Zed First", "seed": {"categories": ["git"]}},
@@ -423,6 +472,16 @@ class DeckHomeUiTests(DeckUiHarness):
           test.check(list && list.count === 33, "list populated")
           test.check(overlay.deckId === "empty", "empty deck selected")
           test.check(test.byName(overlay, "emptyDeckHint").visible === true, "hint rendered")
+          // The wide home keeps its intro and still fits inside the frame.
+          var home = test.byName(overlay, "homeArea")
+          test.check(home && home.compact === false, "wide home is not compact")
+          test.check(test.byName(overlay, "homeTitle").visible === true
+                     && test.byName(overlay, "decksTitleLabel").visible === true,
+                     "wide home keeps the intro")
+          var inside = test.homeBounds(["homeStatus", "homeTitle", "decksTitleLabel",
+                                        "deckListFrame", "deckConfigNote",
+                                        "emptyDeckHint", "startButton"])
+          test.check(inside.length === 7, "wide essentials inside frame: " + inside.join(","))
           list.positionViewAtIndex(0, ListView.Beginning)
         ''', str(path), "en")
 
@@ -452,6 +511,201 @@ class DeckHomeUiTests(DeckUiHarness):
         self.assertEqual(report.get("saved"), str(target))
         self.assertGreater(target.stat().st_size, 1000)
         print(f"render saved: {target}")
+
+    def test_chinese_empty_hint_rejection_note_and_bounded_render(self):
+        # The WP8 localized home copy, asserted on the actual component in
+        # zh-CN and rendered in a small bounded frame for visual inspection.
+        decks = [{"id": "empty", "name": "Empty"}, {"id": "full", "name": "Full House",
+                  "seed": {"categories": ["lsp"]}}]
+        decks += [{"id": f"deck-{n:02}", "name": f"Deck {n:02}"} for n in range(3, 34)]
+        self.write_decks(decks)  # 33 declarations: 32 accepted, 1 rejected
+        self.write_state("settings", {"schemaVersion": 4, "activeDeck": "empty", "locale": "zh-CN",
+                                      "feedbackSound": False, "countdownSound": False,
+                                      "excludedBindings": [], "deckCards": {}})
+        self.write_state("stats", {"schemaVersion": 5, "runSequence": 40, "bindings": {}, "decks": {}})
+        WP8_RENDER_DIR.mkdir(parents=True, exist_ok=True)
+        target = WP8_RENDER_DIR / "home-empty-zh-760x600.png"
+        target.unlink(missing_ok=True)
+        report = self.launch('''
+          var hint = test.byName(overlay, "emptyDeckHint")
+          test.check(hint.visible === true && hint.text === __HINT__, "zh empty hint: " + hint.text)
+          test.check(hint.textFormat === Text.PlainText, "hint plain text")
+          var note = test.byName(overlay, "deckConfigNote")
+          test.check(note.visible === true && note.text === __NOTE__, "zh rejected note: " + note.text)
+          var browse = test.byName(overlay, "browseButtonArea")
+          test.check(browse && browse.enabled, "browse available on home")
+          var list = test.byName(overlay, "deckList")
+          test.check(list && list.count === 33, "all plus 32 accepted")
+          var first = test.rowAt(list, 0)
+          test.check(first.id === "all" && first.name.text === "全部", "all pinned, localized")
+          test.check(test.byName(overlay, "groundBadge").text === "Empty", "user name as-is")
+          var panel = test.byName(overlay, "testPanel")
+          test.check(panel.width === 760 && panel.height === 600, "bounded frame")
+          // The actual compact home layout: the frame stays between HUD and
+          // footer and every essential item stays inside the frame.
+          var home = test.byName(overlay, "homeArea")
+          test.check(home && home.compact === true, "compact home detected")
+          test.check(test.byName(overlay, "homeTitle").visible === false
+                     && test.byName(overlay, "decksTitleLabel").visible === false,
+                     "only the decorative intro yields")
+          var startArea = test.byName(overlay, "startButtonArea")
+          test.check(startArea && startArea.enabled === false, "start disabled on empty compact home")
+          var inside = test.homeBounds(["homeStatus", "deckListFrame", "deckConfigNote",
+                                        "emptyDeckHint", "startButton"])
+          test.check(inside.length === 5, "all essential items checked: " + inside.join(","))
+          test.check(test.rowAt(list, 32).id === "deck-32", "compact list still scrolls to the end")
+          list.positionViewAtIndex(0, ListView.Beginning) // render the repro from the top
+        '''.replace("__HINT__", json.dumps(ZH["emptyDeckHint"]))
+           .replace("__NOTE__", json.dumps(render_copy(ZH, "deckConfigRejected", count=1))),
+           str(target), "zh-CN", size=(760, 600))
+        self.assertEqual(report.get("saved"), str(target))
+        self.assertGreater(target.stat().st_size, 1000)
+        print(f"render saved: {target}")
+    def test_compact_english_home_bounds_refusal_and_resume(self):
+        # The same 760x600 compact repro in English, driven further: refusal,
+        # compact row selection, a real run, and the resumable two-button home.
+        decks = [{"id": "empty", "name": "Empty"}, {"id": "zz-first", "name": "Zed First",
+                  "seed": {"categories": ["git"]}}, {"id": "full", "name": "Full House",
+                  "seed": {"categories": ["lsp"]}}]
+        decks += [{"id": f"deck-{n:02}", "name": f"Deck {n:02}"} for n in range(4, 35)]
+        self.write_decks(decks)  # 34 declarations: 32 accepted, 2 rejected
+        self.write_state("settings", {"schemaVersion": 4, "activeDeck": "empty", "locale": "en",
+                                      "feedbackSound": False, "countdownSound": False,
+                                      "excludedBindings": [], "deckCards": {}})
+        self.write_state("stats", {"schemaVersion": 5, "runSequence": 40, "bindings": {}, "decks": {}})
+        WP8_RENDER_DIR.mkdir(parents=True, exist_ok=True)
+        target = WP8_RENDER_DIR / "home-empty-en-760x600.png"
+        target.unlink(missing_ok=True)
+        report = self.launch('''
+          var home = test.byName(overlay, "homeArea")
+          test.check(home && home.compact === true, "compact home detected")
+          var list = test.byName(overlay, "deckList")
+          test.check(list && list.count === 33, "all rows modelled at compact")
+          test.check(list.height >= 30 && list.height <= 96, "compact list bounded: " + list.height)
+          var hint = test.byName(overlay, "emptyDeckHint")
+          test.check(hint.visible === true && hint.text === __HINT__, "en hint: " + hint.text)
+          var note = test.byName(overlay, "deckConfigNote")
+          test.check(note.visible === true && note.text === __NOTE__, "en note: " + note.text)
+          var inside = test.homeBounds(["homeStatus", "deckListFrame", "deckConfigNote",
+                                        "emptyDeckHint", "startButton"])
+          test.check(inside.length === 5, "essentials inside frame")
+          var start = test.byName(overlay, "startButtonArea")
+          test.check(start.enabled === false, "start disabled on empty compact home")
+          overlay.startPrimary() // the exact call the home Enter handler makes
+          test.check(overlay.view === "home" && overlay.startRefusal === "empty-deck"
+                     && overlay.testStore.stats.runSequence === 40 && overlay.testGuard.plays === 0,
+                     "refused at compact, nothing allocated")
+          test.check(test.rowAt(list, 32).id === "deck-32", "compact list scrolls to the end")
+          list.positionViewAtIndex(0, ListView.Beginning) // render the repro from the top
+        '''.replace("__HINT__", json.dumps(EN["emptyDeckHint"]))
+           .replace("__NOTE__", json.dumps(render_copy(EN, "deckConfigRejected", count=2))),
+           str(target), "en", size=(760, 600))
+        self.assertEqual(report.get("saved"), str(target))
+        self.assertGreater(target.stat().st_size, 1000)
+        print(f"render saved: {target}")
+        # State persists across launches: still on the empty deck.
+        resume_target = WP8_RENDER_DIR / "home-resume-en-760x600.png"
+        resume_target.unlink(missing_ok=True)
+        report = self.launch('''
+          var home = test.byName(overlay, "homeArea")
+          test.check(home.compact === true, "compact")
+          test.check(overlay.deckId === "empty" && overlay.startRefusal === "empty-deck",
+                     "still on the empty deck")
+          var list = test.byName(overlay, "deckList")
+          var git = test.rowAt(list, 2)
+          test.check(git.id === "zz-first", "seeded row present")
+          git.area.clicked(null)
+          test.check(overlay.deckId === "zz-first" && overlay.view === "home",
+                     "compact row selects, stays home")
+          var start = test.byName(overlay, "startButtonArea")
+          test.check(start.enabled === true, "start enabled on non-empty compact home")
+          test.check(test.byName(overlay, "emptyDeckHint").visible === false, "hint settles")
+          start.clicked(null)
+          test.check(overlay.view === "playing" && overlay.deck.length > 0, "run started at compact")
+          overlay.leaveRun()
+          test.check(overlay.view === "home" && overlay.resumeAvailable, "resumable compact home")
+          var fresh = test.byName(overlay, "startFreshArea")
+          test.check(fresh && fresh.enabled === true, "fresh enabled")
+          var inside = test.homeBounds(["homeStatus", "deckListFrame", "deckConfigNote",
+                                        "startButton", "startFreshButton"])
+          test.check(inside.length === 5, "resumable controls inside frame")
+          // The Loader swapped the home card out during the run: re-fetch.
+          var resume = test.byName(overlay, "startButtonArea")
+          resume.clicked(null)
+          test.check(overlay.view === "playing", "resumed through the same control")
+          overlay.leaveRun()
+          test.check(overlay.view === "home" && overlay.resumeAvailable, "home resumable for render")
+        ''', str(resume_target), "en", size=(760, 600))
+        self.assertEqual(report.get("saved"), str(resume_target))
+        self.assertGreater(resume_target.stat().st_size, 1000)
+        print(f"render saved: {resume_target}")
+
+    def test_compact_locked_out_home_geometry_en_zh(self):
+        # Locked-out branch (every shortcut excluded) at 760x600 with a
+        # visible config rejection. Stored exclusions cap at 64 entries and a
+        # real corpus never gets that small, so the temp copy's compiled pack
+        # is regenerated from a trimmed three-card source with the real
+        # generator; loading, exclusion, eligibility and lockout all run their
+        # production path against it. The headline and recovery instructions
+        # must stay visible AND fit inside the frame.
+        decks = [{"id": "empty", "name": "Empty"}]
+        decks += [{"id": f"deck-{n:02}", "name": f"Deck {n:02}"} for n in range(2, 34)]
+        WP8_RENDER_DIR.mkdir(parents=True, exist_ok=True)
+        for locale, catalog in (("en", EN), ("zh-CN", ZH)):
+            with self.subTest(locale=locale):
+                self.setUp()
+                packs = json.loads((self.app / "assets/packs/lazyvim.json").read_text())
+                keep = [card for card in packs["bindings"] if not card["extras"]][:3]
+                packs["bindings"] = keep
+                (self.app / "assets/packs/lazyvim.json").write_text(json.dumps(packs))
+                (self.app / "tools").mkdir()
+                shutil.copy(ROOT / "tools/build_packs.py", self.app / "tools/build_packs.py")
+                # The generator resolves its root from its own file location,
+                # so this recompiles only the temp copy's lib/Packs.js.
+                subprocess.run([sys.executable, str(self.app / "tools/build_packs.py")],
+                               check=True, capture_output=True, timeout=30)
+                exclusions = ["lazyvim:" + card["localId"] for card in keep]
+                self.write_decks(decks)  # 33 declarations: 32 accepted, 1 rejected
+                self.write_state("settings", {"schemaVersion": 4, "activeDeck": "all", "locale": locale,
+                                              "feedbackSound": False, "countdownSound": False,
+                                              "excludedBindings": exclusions, "deckCards": {}})
+                self.write_state("stats", {"schemaVersion": 5, "runSequence": 40,
+                                           "bindings": {}, "decks": {}})
+                suffix = "zh" if locale == "zh-CN" else "en"
+                target = WP8_RENDER_DIR / f"home-locked-{suffix}-760x600.png"
+                target.unlink(missing_ok=True)
+                report = self.launch('''
+                  test.check(overlay.trainingLockedOut === true, "locked out")
+                  test.check(overlay.startBlocked, "nothing to deal")
+                  var home = test.byName(overlay, "homeArea")
+                  test.check(home && home.compact === true, "compact locked-out home")
+                  var title = test.byName(overlay, "homeTitle")
+                  test.check(title.visible === true && title.text === __TITLE__,
+                             "locked-out headline stays visible: " + title.text)
+                  test.check(title.truncated === false, "headline not clipped")
+                  var hint = test.byName(overlay, "allExcludedHint")
+                  test.check(hint.visible === true && hint.text === __HINT__, "recovery copy")
+                  test.check(hint.truncated === false, "recovery instructions fully visible")
+                  var note = test.byName(overlay, "deckConfigNote")
+                  test.check(note.visible === true && note.text === __NOTE__, "config note")
+                  var inside = test.homeBounds(["homeStatus", "homeTitle", "allExcludedHint",
+                                                "deckConfigNote", "deckListFrame"])
+                  test.check(inside.length === 5, "locked-out essentials inside frame: "
+                             + inside.join(","))
+                  var list = test.byName(overlay, "deckList")
+                  test.check(list.count === 33, "decks still listed")
+                  test.check(test.rowAt(list, 0).counts.text === "0/0",
+                             "excluded cards absent from every count")
+                  test.check(test.rowAt(list, 32).id === "deck-32", "locked-out list scrolls")
+                  list.positionViewAtIndex(0, ListView.Beginning) // render from the top
+                '''.replace("__TITLE__", json.dumps(catalog["allExcluded"]))
+                   .replace("__HINT__", json.dumps(catalog["allExcludedHint"]))
+                   .replace("__NOTE__", json.dumps(render_copy(catalog, "deckConfigRejected",
+                                                               count=1))),
+                   str(target), locale, size=(760, 600))
+                self.assertEqual(report.get("saved"), str(target))
+                self.assertGreater(target.stat().st_size, 1000)
+                print(f"render saved: {target}")
 
 
 class DeckHudUiTests(DeckUiHarness):

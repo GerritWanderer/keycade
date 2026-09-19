@@ -28,7 +28,7 @@ Constraints the design must satisfy: the overlay holds `WlrKeyboardFocus.Exclusi
 
 - Introducing a new state file kind or a new write path in `bin/state-store`.
 - Introducing a new binding-id namespace. Cards added through `keymaps.lua` already receive `lazyvim/` ids through the existing override path.
-- Preserving downgrade compatibility of deck-level state. Card-level state must survive a downgrade; deck counters need not.
+- Preserving automatic downgrade compatibility of the new state schemas. This version never deletes card-level history, but older releases may reject or quarantine the newer files and show fresh progress. Keep a version-appropriate backup before downgrading; automatic recovery by an older release is not promised.
 
 ## Decisions
 
@@ -67,7 +67,7 @@ A live seed also means a LazyVim update that adds two Harpoon mappings puts them
 
 ### D4 — The seed vocabulary is closed
 
-`seed` accepts only `categories`, `extras` and `contexts`, each drawn from a vocabulary the loaded pack declares, unioned when more than one is present, and omitted meaning unconstrained. No globs, no regular expressions, no matching on descriptions.
+`seed` accepts only `categories`, `extras` and `contexts`, each drawn from a vocabulary the loaded pack declares. Only present dimensions participate in the union; an omitted dimension adds no match and a present empty array matches nothing. Omitting the entire `seed` property makes the deck manual-only, while an explicit `seed: {}` is unconstrained and matches the eligible corpus. No globs, no regular expressions, no matching on descriptions.
 
 Every seed value can therefore be checked against the pack, so an unrecognised value is a counted rejection rather than a silent half-match, and validation is total. It also stops the seed from becoming a query language that must be documented, versioned and fuzzed.
 
@@ -130,7 +130,7 @@ The fixed 2×3 cabinet grid is replaced by a vertical scrollable list, one row p
 
 ### D10 — Foreign-prefix state is retained and inert, never deleted
 
-Card entries under `hyprland/`, `herdr/`, `tmux/`, `vim/` and `neovim/` prefixes are kept untouched, not counted and not displayed. They cost roughly 250 entries against a `MAX_BINDINGS` budget of 4000, and retaining them makes a downgrade non-destructive.
+Card entries under `hyprland/`, `herdr/`, `tmux/`, `vim/` and `neovim/` prefixes are kept untouched, not counted and not displayed. They cost roughly 250 entries against a `MAX_BINDINGS` budget of 4000, and retaining them preserves the records for recovery rather than discarding earned history. Data retention is not automatic schema compatibility: older releases may quarantine the newer stats file instead of reading it.
 
 This follows an established convention: `Session.excludedList` already keeps other grounds' exclusion entries specifically so two grounds cannot clear each other's. Exclusions therefore need no migration at all.
 
@@ -215,14 +215,14 @@ An addition that would carry `deckCards` past its cap is refused and surfaced, l
 - **Roughly half the Python test suite is deleted**, in code paths that carry R7 trusted-command logic. → The `--guard-status` tests in `test_keybinds_json.py` are retained rather than deleted with the file, and are the acceptance gate for the reduced helper.
 - **Two schema migrations land at once** (settings and stats). → Both are additive-plus-rename with no card-level deletion (D10); the existing quarantine path in `StateStore` already handles a file that fails to parse.
 - **Cards from `keymaps.lua` default to the broad `misc` category rather than plugin-specific categories.** → They can be collected by valid `misc` or context seeds, while browse-and-pick supports finer-grained manual assignment. The same seed formula applies to custom and packaged cards.
-- **Deck state does not survive a downgrade.** → Card history does, which is the part that took months to earn. Deck definitions are a config file the user still has.
+- **Older releases may reject the new state schemas.** → Upgrading preserves card history, and this version does not delete it, but automatic downgrade compatibility is not provided. Back up state before downgrading and retain any quarantined files for recovery. Deck definitions remain in the user-owned config file.
 
 ## Migration Plan
 
 1. `settings.json` schemaVersion 3 → 4: `activeProfile` becomes `activeDeck`; any stored value maps to `all`. `excludedBindings` is untouched — foreign-prefix entries are already retained and inert.
 2. `stats.json` schemaVersion 4 → 5: `profiles` becomes `decks`; `profiles["lazyvim"]` becomes `decks["all"]`, preserving runs, training time and mastery; the other five profile records are dropped. `bindings` is untouched, including foreign-prefix entries (D10). Initialize the bounded global run sequence from LazyVim counters/history and reserve any unfinished legacy LazyVim session identity before allocating a new run (D8); foreign-prefix history does not influence this sequence.
 3. On first launch after the update the user sees the `all` deck with their existing LazyVim progress intact, plus the shipped starter decks, and no `decks.json`.
-4. No rollback path for deck-level counters. Card-level history is preserved under both schemas, so a downgrade loses run counts and celebration flags but no recall history.
+4. No automatic rollback path is provided. The upgrade preserves card records, but older releases do not necessarily accept the new settings, stats or session schemas; they may quarantine those files and start with fresh visible progress. Back up state before downgrading and retain quarantined files for recovery. Do not promise automatic card-history or deck-counter compatibility with an older release.
 
 ## Open Questions
 

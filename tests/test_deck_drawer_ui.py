@@ -7,10 +7,17 @@ import json
 from pathlib import Path
 import unittest
 
-from test_deck_ui import DeckUiHarness, IDS, LONG_NAME, MARKUP_NAME
+from test_deck_ui import DeckUiHarness, IDS, LONG_NAME, MARKUP_NAME, EN, ZH, render_copy
 
 RENDERS = Path("/tmp/keycade-wp7b-renders")
+WP8_RENDERS = Path("/tmp/keycade-wp8-renders")
 EXTRA = "lazyvim.plugins.extras.editor.harpoon2"
+
+# Expected copy is read from the shipped catalogs (see test_deck_ui), never
+# re-hardcoded here, so the assertions track the actual translations.
+COPY = {"add": EN["browseAdd"], "added": EN["browseInDeckAdded"],
+        "seeded": EN["browseInDeckSeeded"], "allReadOnly": EN["browseAllReadOnly"],
+        "targetMissing": EN["browseTargetMissing"], "capacityRefused": EN["browseCapacityRefused"]}
 
 HELPERS = '''
   function openBrowse() {
@@ -85,8 +92,8 @@ class DeckDrawerUiTests(DeckUiHarness):
                                    "bindings": {IDS[0]: self.mastered_entry()},
                                    "decks": {"nemesis": {"runs": 3}}})
 
-    def run_ui(self, body, render_to="", size=(1280, 800)):
-        return self.launch(body, str(render_to), helpers=HELPERS, size=size)
+    def run_ui(self, body, render_to="", size=(1280, 800), locale="en"):
+        return self.launch(body, str(render_to), locale=locale, helpers=HELPERS, size=size)
 
     def test_filters_custom_added_changed_active_extras_and_membership(self):
         config = self.home / ".config/nvim"
@@ -129,29 +136,30 @@ class DeckDrawerUiTests(DeckUiHarness):
 
     def test_three_membership_states_other_badges_history_and_readonly_all(self):
         self.run_ui('''
+          var COPY = __COPY__
           test.openBrowse()
           var history = JSON.stringify(overlay.testStore.stats)
           var session = JSON.stringify(overlay.testStore.session)
           var id = "lazyvim/normal/gd"
-          test.check(test.label(id) === "ADD", "out state")
+          test.check(test.label(id) === COPY.add, "out state")
           var badges = test.byName(test.row(id), "browseBadges")
           test.check(badges.text.indexOf("All") !== -1 && badges.text.indexOf("LSP") !== -1, "other-deck badges all + lsp")
           test.toggleCard(id)
-          test.check(test.label(id) === "IN DECK (ADDED)", "added state")
+          test.check(test.label(id) === COPY.added, "added state")
           test.check(overlay.deckProgress.nemesis.total === 1, "live target count")
           test.toggleCard(id)
-          test.check(test.label(id) === "ADD", "added reset")
+          test.check(test.label(id) === COPY.add, "added reset")
           test.check(overlay.testStore.settings.deckCards.nemesis.added.length === 0
                      && overlay.testStore.settings.deckCards.nemesis.removed.length === 0, "reset clears overrides")
           test.pickTarget("lsp")
           test.check(overlay.deckId === "nemesis" && overlay.testStore.settings.activeDeck === "nemesis", "target independent from study")
-          test.check(test.label(id) === "IN DECK (SEEDED)", "seeded state")
+          test.check(test.label(id) === COPY.seeded, "seeded state")
           test.toggleCard(id)
-          test.check(test.label(id) === "ADD", "pruned seed is out")
+          test.check(test.label(id) === COPY.add, "pruned seed is out")
           test.check(overlay.testStore.settings.deckCards.lsp.removed.indexOf(id) !== -1, "seed pruned")
           test.check(overlay.cardsForDeck("all").some(function(card) { return card.id === id }), "per-deck prune not global")
           test.toggleCard(id)
-          test.check(test.label(id) === "IN DECK (SEEDED)", "pruned seed restored")
+          test.check(test.label(id) === COPY.seeded, "pruned seed restored")
           test.check(overlay.testStore.settings.deckCards.lsp.added.length === 0
                      && overlay.testStore.settings.deckCards.lsp.removed.length === 0, "no added+removed collision")
           test.pickTarget("all")
@@ -160,11 +168,11 @@ class DeckDrawerUiTests(DeckUiHarness):
           test.check(!area.enabled, "all action disabled")
           area.clicked(null) // even synthetic click cannot write reserved all
           test.check(JSON.stringify(overlay.testStore.settings) === before, "all read-only")
-          test.check(test.byName(overlay, "browseNotice").text.indexOf("READ-ONLY") !== -1, "friendly choose-target hint")
+          test.check(test.byName(overlay, "browseNotice").text === COPY.allReadOnly, "friendly choose-target hint")
           test.check(JSON.stringify(overlay.testStore.stats) === history, "mastery and history byte-identical")
           test.check(JSON.stringify(overlay.testStore.session) === session, "session untouched")
           test.check(overlay.testGuard.plays === 0 && overlay.testStore.stats.runSequence === 40, "no allocation")
-        ''')
+        '''.replace("__COPY__", json.dumps(COPY)))
 
     def test_exclusions_missing_target_and_config_change_fail_closed(self):
         self.settings["excludedBindings"] = ["lazyvim:normal/gd"]
@@ -185,7 +193,7 @@ class DeckDrawerUiTests(DeckUiHarness):
           test.check(overlay.browseRows.indexOf("lazyvim/normal/gd") === -1, "chips cannot restore exclusion")
           overlay.deckDefinitions = overlay.deckDefinitions.filter(function(d) { return d.id !== "nemesis" })
           test.check(overlay.browseTarget === null, "removed target stays missing, no silent fallback")
-          test.check(test.byName(overlay, "browseNotice").text.indexOf("UNAVAILABLE") !== -1, "missing target notice")
+          test.check(test.byName(overlay, "browseNotice").text === __TARGET_MISSING__, "missing target notice")
           test.check(!overlay.toggleBrowseCard("lazyvim/normal/gr"), "missing target refuses")
           overlay.chooseBrowseTarget("orphan")
           test.check(overlay.browseTargetId === "nemesis", "inert orphan cannot be selected")
@@ -193,7 +201,7 @@ class DeckDrawerUiTests(DeckUiHarness):
           test.check(JSON.stringify(overlay.testStore.stats) === history, "excluded history retained")
           test.pickTarget("lsp")
           test.check(overlay.browseTarget !== null, "can choose valid replacement")
-        ''')
+        '''.replace("__TARGET_MISSING__", json.dumps(COPY["targetMissing"])))
 
     def test_budget_refusal_visible_nonfatal_and_state_bytes_unchanged(self):
         # Valid, almost-full retained orphan deltas exercise the actual 24 KiB
@@ -212,15 +220,16 @@ class DeckDrawerUiTests(DeckUiHarness):
           test.openBrowse()
           var before = JSON.stringify(overlay.testStore.settings.deckCards)
           test.toggleCard("lazyvim/normal/gd")
-          test.check(test.label("lazyvim/normal/gd") === "ADD", "refusal retains row membership")
+          test.check(test.label("lazyvim/normal/gd") === __ADD__, "refusal retains row membership")
           test.check(overlay.testStore.deckCardsRefusal === "deck-cards-limit", "real store budget refused")
           var notice = test.byName(overlay, "browseNotice")
-          test.check(notice.visible && notice.text.indexOf("NOT SAVED") !== -1, "visible nonfatal refusal")
+          test.check(notice.visible && notice.text === __CAPACITY__, "visible nonfatal refusal")
           test.check(notice.maximumLineCount === 2 && notice.textFormat === Text.PlainText, "bounded refusal")
           test.check(JSON.stringify(overlay.testStore.settings.deckCards) === before, "deltas unmodified")
           test.check(overlay.view === "home" && overlay.browseOpen, "still usable, not blocked")
           test.check(overlay.testStore.stats.runSequence === 40, "identity unchanged")
-        ''')
+        '''.replace("__CAPACITY__", json.dumps(COPY["capacityRefused"]))
+           .replace("__ADD__", json.dumps(COPY["add"])))
         self.assertEqual(path.read_bytes(), before)
 
     def test_availability_modal_input_menu_coordination_and_saved_resume_shrink(self):
@@ -384,6 +393,46 @@ class DeckDrawerUiTests(DeckUiHarness):
           }
           test.check(overlay.browseRows.length > 1, "membership render rows populated")
         ''', target)
+        self.assertEqual(report.get("saved"), str(target))
+        self.assertGreater(target.stat().st_size, 1000)
+        print(f"render saved: {target}")
+
+    def test_render_drawer_chinese_bounded_frame(self):
+        # WP8: the localized drawer asserted on actual delegates in zh-CN and
+        # rendered inside the smallest supported frame for visual inspection.
+        WP8_RENDERS.mkdir(exist_ok=True)
+        target = WP8_RENDERS / "drawer-zh-760x600.png"
+        target.unlink(missing_ok=True)
+        report = self.run_ui('''
+          var ZH = __ZH__
+          if (test.step === 0) {
+            test.openBrowse()
+            test.step = 1; test.later(); return
+          }
+          test.check(overlay.testI18n.locale === "zh-CN", "zh-CN active")
+          test.check(test.byName(overlay, "browseTargetName").text === ZH.targetNemesis,
+                     "zh target selector: " + test.byName(overlay, "browseTargetName").text)
+          test.check(test.byName(overlay, "browseAllCards").label === ZH.allCards, "zh all-cards chip")
+          test.check(test.byName(overlay, "browseInDeck").label === ZH.inDeck, "zh in-deck chip")
+          test.check(test.byName(overlay, "browseClose").label === ZH.close, "zh close chip")
+          test.check(test.label("lazyvim/normal/gd") === ZH.add, "zh add action")
+          test.toggleCard("lazyvim/normal/gd")
+          test.check(test.label("lazyvim/normal/gd") === ZH.added, "zh added action")
+          test.pickTarget("all")
+          test.check(test.byName(overlay, "browseNotice").text === ZH.allReadOnly, "zh read-only notice")
+          test.check(test.byName(overlay, "browseNotice").textFormat === Text.PlainText, "notice plain text")
+          var drawer = test.byName(overlay, "browseDrawer")
+          var panel = test.byName(overlay, "testPanel")
+          var position = drawer.mapToItem(panel, 0, 0)
+          test.check(panel.width === 760 && panel.height === 600, "bounded frame")
+          test.check(position.x >= 0 && position.y >= 0 && position.y + drawer.height <= panel.height,
+                     "drawer inside bounded frame")
+        '''.replace("__ZH__", json.dumps({
+            "targetNemesis": render_copy(ZH, "browseTarget", name="Nemesis"),
+            "allCards": ZH["browseAllCards"], "inDeck": ZH["browseInDeck"],
+            "close": ZH["browseClose"], "add": ZH["browseAdd"],
+            "added": ZH["browseInDeckAdded"], "allReadOnly": ZH["browseAllReadOnly"]},
+            ensure_ascii=False)), target, (760, 600), "zh-CN")
         self.assertEqual(report.get("saved"), str(target))
         self.assertGreater(target.stat().st_size, 1000)
         print(f"render saved: {target}")

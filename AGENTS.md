@@ -9,10 +9,10 @@ Welcome to **Keycade** (`luneth90/keycade`). This document defines the foundatio
 - **Name**: Keycade
 - **Repository**: `https://github.com/luneth90/keycade`
 - **License**: [MIT License](LICENSE)
-- **Primary Domain**: Native Wayland / Omarchy desktop overlay for arcade-style shortcut recall training.
+- **Primary Domain**: Native Wayland / Omarchy desktop overlay for arcade-style LazyVim shortcut recall training with user-authored decks.
 - **Core Stacks**:
   - **Frontend / UI**: QML (Qt 6.8+ / Quick / Controls 2), running within [Quickshell](https://quickshell.outfoxxed.me/) (`Quickshell.Wayland._ShortcutsInhibitor`).
-  - **Backend / Runtime Helpers**: Python 3.12+ scripts located in `bin/` (`keybinds-json`, `app-config-json`, `tmux-keys-json`, `herdr-keys-json`, `state-store`, `bounded-relay`).
+  - **Backend / Runtime Helpers**: Python 3.12+ scripts located in `bin/` (`keybinds-json`, `app-config-json`, `state-store`, `bounded-relay`).
   - **System Integration**: Linux `prctl(PR_SET_PDEATHSIG)`, `hyprctl` (read-only query mode).
   - **Security & Quality**: OpenSSF Scorecard (Target $\ge$ 7.5), OpenSSF Best Practices (Passing Badge), CodeQL SAST, Dependabot, Atheris fuzz testing.
 
@@ -26,10 +26,8 @@ keycade/
 ├── manifest.json              # Omarchy plugin manifest and metadata
 ├── bin/                       # Sandboxed runtime helpers (Python)
 │   ├── bounded-relay          # Timeout/resource guardian with setsid & PDEATHSIG
-│   ├── keybinds-json          # Hyprland active binding & keymap extractor
-│   ├── app-config-json        # Static LazyVim calibration and tmux prefix parser
-│   ├── tmux-keys-json         # Existing tmux server's live key reader
-│   ├── herdr-keys-json        # Herdr multiplexer binding reader
+│   ├── keybinds-json          # Hyprland guard preflight (`--guard-status`)
+│   ├── app-config-json        # Static LazyVim calibration and decks.json reader
 │   └── state-store            # Descriptor-relative atomic state storage
 ├── lib/                       # QML components, business logic, and sound assets
 │   ├── SafeText.qml           # Security-hardened PlainText renderer (R5)
@@ -37,11 +35,14 @@ keycade/
 │   ├── InputGuard.qml         # Wayland shortcut inhibitor boundary
 │   ├── InputNormalizer.js     # Shared key normalization logic
 │   ├── AnswerMatcher.js       # Sequence & chord input evaluation
-│   ├── Scheduler.js           # Spaced repetition engine (24-card sessions)
+│   ├── Decks.js               # Deck definitions, live seed evaluation, membership
+│   ├── DeckState.js           # Bounded membership deltas (24 KiB, refuse-not-evict)
+│   ├── DeckValidation.js      # Independent QML-side decks.json re-validation (R2)
+│   ├── Scheduler.js           # Spaced repetition engine (deck-sized sessions, ≤24 cards)
 │   └── sources/               # Data sources connecting helpers to QML models
 ├── tests/                     # Automated test suites
-│   ├── test_*.py              # Python unit and security invariant tests (189+)
-│   ├── fuzz_keybinds.py       # Atheris fuzzing harness for keybinding parsers
+│   ├── test_*.py              # Python unit and security invariant tests
+│   ├── fuzz_keybinds.py       # Atheris fuzzing harness for the decks.json reader
 │   ├── qml/                   # QML algorithm verification tests
 │   └── fixtures/              # Test data fixtures and cross-language corpora
 ├── tools/                     # Build tools (packs, locales, screenshots)
@@ -124,14 +125,21 @@ Examples:
 Before committing or opening a PR, agents **MUST** run and pass the automated test suites:
 
 ```bash
-# 1. Run full Python test suite (189+ tests)
+# 1. Run full Python test suite
 python3 -m unittest discover -s tests -p "test_*.py"
 
 # 2. Run Atheris fuzzing smoke test
 python3 tests/fuzz_keybinds.py -runs=1000
 
-# 3. Run QML algorithms verification (requires Qt6)
-QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner   -input tests/qml/tst_algorithms.qml   -import /usr/lib/qt6/qml
+# 3. Run QML verification suites (requires Qt6): the algorithms core ...
+QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/qml/tst_algorithms.qml -import /usr/lib/qt6/qml
+
+# ... and every other suite (tst_decks, tst_decks_reader, tst_guard_status,
+# tst_migrations), one qmltestrunner process per file
+for suite in tests/qml/tst_*.qml; do
+  [ "$suite" = "tests/qml/tst_algorithms.qml" ] && continue
+  QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input "$suite" -import /usr/lib/qt6/qml
+done
 
 # 4. Check QML component syntax
 qmllint Keycade.qml lib/*.qml

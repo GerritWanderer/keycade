@@ -460,13 +460,13 @@ Item {
   }
 
   function browseMembershipLabel(membership) {
-    return !membership.member ? "ADD"
-        : membership.added ? "IN DECK (ADDED)" : "IN DECK (SEEDED)"
+    return !membership.member ? i18n.t("browseAdd")
+        : membership.added ? i18n.t("browseInDeckAdded") : i18n.t("browseInDeckSeeded")
   }
 
   function toggleBrowseCard(cardId) {
     if (!root.browseOpen || !root.browseAvailable) return false
-    if (!root.browseTarget) { root.browseWarning = "DECK UNAVAILABLE — CHOOSE ANOTHER TARGET"; return false }
+    if (!root.browseTarget) { root.browseWarning = i18n.t("browseTargetMissing"); return false }
     if (root.browseTargetId === "all") return false
     if (!root.browseCard(cardId)) return false
     var membership = root.deckMembership(root.browseTargetId, cardId)
@@ -475,7 +475,7 @@ Item {
     var action = membership.member ? (membership.added ? "reset" : "remove")
         : membership.seeded ? "reset" : "add"
     if (!root.setDeckCard(root.browseTargetId, cardId, action)) {
-      root.browseWarning = "DECK CHANGE NOT SAVED — CURATION LIMIT REACHED; REMOVE A CHOICE AND TRY AGAIN"
+      root.browseWarning = i18n.t("browseCapacityRefused")
       return false
     }
     root.browseWarning = ""
@@ -827,9 +827,9 @@ Item {
   // training - it only narrows the list.
   function deckConfigNote() {
     if (root.deckConfigReason !== "")
-      return "DECKS CONFIG INVALID (" + root.deckConfigReason + ") — TRAINING ON ALL"
+      return i18n.t("deckConfigInvalid", { reason: root.deckConfigReason })
     if (root.deckConfigRejected > 0)
-      return "DECKS CONFIG: " + root.deckConfigRejected + " REJECTED"
+      return i18n.t("deckConfigRejected", { count: root.deckConfigRejected })
     return ""
   }
 
@@ -948,7 +948,7 @@ Item {
       store.saveStats()
       return identity
     } catch (identityError) {
-      root.errorMessage = "Run identity space is exhausted."
+      root.errorMessage = i18n.t("runIdentityExhausted")
       guard.fail(root.errorMessage)
       return 0
     }
@@ -1007,7 +1007,7 @@ Item {
     try {
       root.sessionRunIdentity = Stats.adoptRunIdentity(store.stats, session.runId)
     } catch (identityError) {
-      root.errorMessage = "Run identity is invalid."
+      root.errorMessage = i18n.t("runIdentityInvalid")
       guard.fail(root.errorMessage)
       return
     }
@@ -1340,7 +1340,7 @@ Item {
     try {
       Stats.requestGuidance(store.stats, bindingId, root.activeRunId)
     } catch (identityError) {
-      root.errorMessage = "Run identity space is exhausted."
+      root.errorMessage = i18n.t("runIdentityExhausted")
       guard.fail(root.errorMessage)
       return
     }
@@ -1661,7 +1661,7 @@ Item {
             SafeText {
               anchors.centerIn: parent; width: parent.width - 12
               horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight
-              text: "BROWSE"; color: root.browseOpen ? root.primaryColor : root.inkColor
+              text: i18n.t("browse"); color: root.browseOpen ? root.primaryColor : root.inkColor
               font.family: "monospace"; font.bold: true; font.pixelSize: 10
             }
             MouseArea {
@@ -1819,7 +1819,7 @@ Item {
               objectName: "browseTargetName"
               anchors.fill: parent; anchors.margins: 8
               verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
-              text: "TARGET: " + (root.deckDisplayName(root.browseTarget) || "UNAVAILABLE") + " ▾"
+              text: i18n.t("browseTarget", { name: root.deckDisplayName(root.browseTarget) || i18n.t("browseTargetUnavailable") })
               color: root.inkColor; font.family: "monospace"; font.pixelSize: 12; font.bold: true
             }
             MouseArea {
@@ -1830,7 +1830,7 @@ Item {
           }
           BrowseChip {
             objectName: "browseClose"
-            width: 80; height: parent.height; label: "CLOSE"
+            width: 80; height: parent.height; label: i18n.t("browseClose")
             onPicked: root.closeBrowse()
           }
         }
@@ -1850,7 +1850,7 @@ Item {
             delegate: BrowseChip {
               required property string modelData
               objectName: "browseCategory:" + modelData
-              label: modelData ? i18n.t("category_" + modelData) : "ALL CATEGORIES"
+              label: modelData ? i18n.t("category_" + modelData) : i18n.t("browseAllCategories")
               selected: root.browseCategory === modelData
               onPicked: root.browseCategory = modelData
             }
@@ -1864,8 +1864,8 @@ Item {
             delegate: BrowseChip {
               required property string modelData
               objectName: "browseSource:" + modelData
-              label: modelData === "custom" ? "CUSTOM (KEYMAPS.LUA)"
-                  : modelData ? modelData.split(".").pop() : "ALL SOURCES"
+              label: modelData === "custom" ? i18n.t("browseCustom")
+                  : modelData ? modelData.split(".").pop() : i18n.t("browseAllSources")
               selected: root.browseSource === modelData
               onPicked: root.browseSource = modelData
             }
@@ -1874,21 +1874,22 @@ Item {
             width: parent.width; height: 28; spacing: 6
             BrowseChip {
               objectName: "browseAllCards"
-              label: "ALL CARDS"; selected: !root.browseInDeck
+              label: i18n.t("browseAllCards"); selected: !root.browseInDeck
               onPicked: root.browseInDeck = false
             }
             BrowseChip {
               objectName: "browseInDeck"
-              label: "IN DECK"; selected: root.browseInDeck
+              label: i18n.t("browseInDeck"); selected: root.browseInDeck
               onPicked: root.browseInDeck = true
             }
             SafeText {
               objectName: "browseCount"
               width: Math.max(0, parent.width - x); height: parent.height
               verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
-              text: root.browseRows.length + " CARDS · "
-                  + (root.deckProgress[root.browseTargetId] ? root.deckProgress[root.browseTargetId].total : 0)
-                  + " IN TARGET"
+              text: i18n.t("browseCounts", {
+                cards: root.browseRows.length,
+                total: root.deckProgress[root.browseTargetId] ? root.deckProgress[root.browseTargetId].total : 0
+              })
               color: root.mutedColor; font.family: "monospace"; font.pixelSize: 10
             }
           }
@@ -1965,7 +1966,7 @@ Item {
           anchors.centerIn: browseList
           width: browseList.width; horizontalAlignment: Text.AlignHCenter
           visible: !root.browseRows.length
-          text: "NO MATCHING CARDS"
+          text: i18n.t("browseNoMatches")
           color: root.mutedColor; font.family: "monospace"; font.pixelSize: 12
           elide: Text.ElideRight
         }
@@ -1975,8 +1976,8 @@ Item {
           anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
           anchors.margins: 12
           height: 30
-          text: root.browseWarning || (!root.browseTarget ? "DECK UNAVAILABLE — CHOOSE ANOTHER TARGET"
-              : root.browseTargetId === "all" ? "ALL IS READ-ONLY — CHOOSE AN EDITABLE TARGET DECK"
+          text: root.browseWarning || (!root.browseTarget ? i18n.t("browseTargetMissing")
+              : root.browseTargetId === "all" ? i18n.t("browseAllReadOnly")
               : root.deckConfigNote())
           color: root.coinColor; font.family: "monospace"; font.pixelSize: 10
           wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
@@ -2207,6 +2208,7 @@ Item {
 
       Rectangle {
         id: screenArea
+        objectName: "screenArea"
         anchors.left: parent.left; anchors.right: parent.right
         anchors.top: topbar.bottom
         anchors.bottom: statusStrip.top
@@ -2362,6 +2364,7 @@ Item {
 
               Rectangle {
                 id: card
+                objectName: "screenCard"
                 anchors.fill: parent
                 anchors.margins: 8
                 color: root.cabinetColor
@@ -2460,13 +2463,39 @@ Item {
     id: homeCard
     Item {
       id: homeArea
+      objectName: "homeArea"
+      // Short or narrow frames get the compact home: the decorative intro
+      // yields its room so every essential element - status, list, config
+      // note, hint and the start controls - stays inside the card frame.
+      readonly property bool compact: homeArea.width < 560 || homeArea.height < 320
       Column {
+        id: homeColumn
         anchors.centerIn: parent
         width: parent.width - 70
         // The cabinet is a fixed frame: this column has to fit inside it at
         // the smallest size the panel is drawn at, so it stays short.
-        spacing: 13
+        spacing: homeArea.compact ? 6 : 13
+
+        // The list takes the room the other home elements actually leave, so
+        // wrapped notes/hints and compact controls can never push anything
+        // out of the card frame. Twenty pixels of vertical clearance keeps
+        // content clear of the decorated frame, not just the border.
+        function siblingsHeight() {
+          var items = [homeStatus, homeTitle, allExcludedHint, decksTitleLabel,
+                       deckConfigNote, emptyDeckHint, homeControls]
+          var total = 0
+          var gaps = deckListFrame.visible ? 1 : 0
+          for (var i = 0; i < items.length; i++) {
+            if (!items[i].visible) continue
+            total += Math.max(items[i].height, items[i].implicitHeight)
+            gaps += 1
+          }
+          return total + homeColumn.spacing * Math.max(0, gaps - 1)
+        }
+
         SafeText {
+          id: homeStatus
+          objectName: "homeStatus"
           width: parent.width; horizontalAlignment: Text.AlignHCenter
           // The home screen stays up while a cabinet loads, so this line is
           // what says the wait is happening - the screen itself no longer goes
@@ -2476,41 +2505,54 @@ Item {
           color: root.successColor; font.family: "monospace"; font.bold: true; font.pixelSize: 13; font.letterSpacing: 2
         }
         SafeText {
+          id: homeTitle
+          objectName: "homeTitle"
           width: parent.width; horizontalAlignment: Text.AlignHCenter
+          // The one redundant element on a compact home: the controls below
+          // say how to start, so the big intro yields its room to them. The
+          // loading and locked-out headlines are not decorative, they stay -
+          // at a compact-legible size, so the frame still closes around them
+          // and the recovery instructions below them.
+          visible: !homeArea.compact || root.view !== "home" || root.trainingLockedOut
           text: root.view !== "home" ? "···"
                 : root.trainingLockedOut ? i18n.t("allExcluded")
                 : i18n.t(root.resumeAvailable ? "resumeTitle" : "start")
-          color: root.inkColor; font.family: "monospace"; font.bold: true; font.pixelSize: 28; wrapMode: Text.WordWrap
+          color: root.inkColor; font.family: "monospace"; font.bold: true
+          font.pixelSize: homeArea.compact ? 16 : 28; wrapMode: Text.WordWrap
         }
         // Only the line that tells you how to get out of a corner. The run's
         // shape - 24 cards, saved state - was on the card for its own sake and
         // the cabinet row needed the room more; the buttons below say how to
         // start, which is the only thing that line was still doing.
         SafeText {
+          id: allExcludedHint
+          objectName: "allExcludedHint"
           width: parent.width; horizontalAlignment: Text.AlignHCenter
           visible: root.trainingLockedOut
           text: i18n.t("allExcludedHint")
           color: root.coinColor
-          font.pixelSize: 15; wrapMode: Text.WordWrap
+          font.pixelSize: homeArea.compact ? 12 : 15; wrapMode: Text.WordWrap
         }
         // D9: the cabinet grid is retired with the grounds. Decks are one
         // bounded, vertical, scrollable list - all pinned first, then
         // declaration order - showing name, live card count and mastery.
         SafeText {
+          id: decksTitleLabel
+          objectName: "decksTitleLabel"
           width: parent.width; horizontalAlignment: Text.AlignHCenter
-          visible: root.view === "home"
-          text: "DECKS"
+          visible: root.view === "home" && !homeArea.compact
+          text: i18n.t("decksTitle")
           color: root.mutedColor; font.family: "monospace"; font.pixelSize: 10
           font.bold: true; font.letterSpacing: 3
         }
         Rectangle {
+          id: deckListFrame
+          objectName: "deckListFrame"
           anchors.horizontalCenter: parent.horizontalCenter
           visible: root.view === "home"
           width: Math.min(parent.width, 470)
-          // The cabinet is a fixed frame: never let the list push the start
-          // controls (or the status line) out of it, however many decks are
-          // declared.
-          height: Math.max(52, Math.min(132, homeArea.height - 236))
+          height: Math.max(40, Math.min(homeArea.compact ? 96 : 132,
+                                        homeArea.height - 20 - homeColumn.siblingsHeight()))
           color: root.voidColor; border.width: 2; border.color: root.mutedColor
           ListView {
             id: deckList
@@ -2577,6 +2619,7 @@ Item {
         }
         // A config the reader rejected still trains (on all); say so plainly.
         SafeText {
+          id: deckConfigNote
           objectName: "deckConfigNote"
           width: parent.width; horizontalAlignment: Text.AlignHCenter
           visible: root.view === "home" && root.deckConfigNote() !== ""
@@ -2588,12 +2631,13 @@ Item {
         // there is nothing to deal: the controls refuse and this hint names
         // the usable top-bar control for adding cards.
         SafeText {
+          id: emptyDeckHint
           objectName: "emptyDeckHint"
           width: parent.width; horizontalAlignment: Text.AlignHCenter
           visible: root.view === "home" && !root.groundLoading && !root.trainingLockedOut
                    && root.startRefusal === "empty-deck"
-          text: "EMPTY DECK — USE BROWSE ABOVE TO ADD CARDS"
-          color: root.coinColor; font.pixelSize: 12; font.bold: true
+          text: i18n.t("emptyDeckHint")
+          color: root.coinColor; font.pixelSize: homeArea.compact ? 11 : 12; font.bold: true
           wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
         }
         // A pack ground says where its table came from, so nothing here can
@@ -2608,6 +2652,7 @@ Item {
         // once a ground names where its table came from, and they were never
         // a sequence anyway - they are two ways to begin.
         Row {
+          id: homeControls
           anchors.horizontalCenter: parent.horizontalCenter
           spacing: 10
           visible: root.view === "home" && !root.trainingLockedOut
@@ -2617,7 +2662,12 @@ Item {
           opacity: root.groundLoading || root.startBlocked ? 0.4 : 1
           Rectangle {
             objectName: "startButton"
-            width: root.resumeAvailable ? 200 : 240; height: 46
+            width: homeArea.compact
+                   ? (root.resumeAvailable
+                      ? Math.max(110, Math.floor((homeColumn.width - 10) * 0.55))
+                      : Math.min(200, homeColumn.width))
+                   : (root.resumeAvailable ? 200 : 240)
+            height: homeArea.compact ? 36 : 46
             color: root.primaryColor; border.width: 4; border.color: root.voidColor
             SafeText { anchors.centerIn: parent; width: parent.width - 16; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; text: "▶  " + i18n.t(root.resumeAvailable ? "resumeRun" : "startRun"); color: root.voidColor; font.family: "monospace"; font.bold: true; font.pixelSize: 15 }
             MouseArea {
@@ -2629,7 +2679,8 @@ Item {
           }
           Rectangle {
             objectName: "startFreshButton"
-            width: 160; height: 46
+            width: homeArea.compact ? Math.max(90, Math.floor((homeColumn.width - 10) * 0.45)) : 160
+            height: homeArea.compact ? 36 : 46
             visible: root.resumeAvailable
             color: root.screenColor; border.width: 2; border.color: root.mutedColor
             SafeText { anchors.centerIn: parent; width: parent.width - 12; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; text: i18n.t("startFresh"); color: root.mutedColor; font.family: "monospace"; font.bold: true; font.pixelSize: 12 }

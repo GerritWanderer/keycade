@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Keycade (`luneth90/keycade`) is a native Omarchy/Wayland desktop overlay for arcade-style shortcut recall training.
+Keycade (`luneth90/keycade`) is a native Omarchy/Wayland desktop overlay for arcade-style LazyVim shortcut recall training with user-authored decks.
 
 ---
 
@@ -8,7 +8,7 @@ Keycade (`luneth90/keycade`) is a native Omarchy/Wayland desktop overlay for arc
 
 ### Testing & Verification
 ```bash
-# Run all Python unit and security tests (189+ tests)
+# Run all Python unit and security tests
 python3 -m unittest discover -s tests -p "test_*.py"
 
 # Run a single test module
@@ -17,8 +17,12 @@ python3 -m unittest tests/test_keybinds_json.py
 # Run Atheris fuzzing smoke test
 python3 tests/fuzz_keybinds.py -runs=1000
 
-# Run QML algorithm tests (requires Qt6)
+# Run the QML verification suites (requires Qt6), one process per file
 QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/qml/tst_algorithms.qml -import /usr/lib/qt6/qml
+for suite in tests/qml/tst_*.qml; do
+  [ "$suite" = "tests/qml/tst_algorithms.qml" ] && continue
+  QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input "$suite" -import /usr/lib/qt6/qml
+done
 
 # Lint QML files
 qmllint Keycade.qml lib/*.qml
@@ -38,15 +42,11 @@ omarchy restart shell
 ## 2. Architecture & Data Flow
 
 - **Frontend**: `Keycade.qml` + `lib/` (Qt 6.8+ Quick / Controls 2 running in Quickshell).
-- **Cabinets (Grounds)**:
-  1. `Omarchy`: Live Hyprland shortcuts from `bin/keybinds-json` via `hyprctl`.
-  2. `herdr`: Multiplexer bindings from `bin/herdr-keys-json`.
-  3. `tmux`: Live bindings from `bin/tmux-keys-json`; static prefix calibration from `bin/app-config-json` with a shipped fallback table.
-  4. `VIM`: Curated upstream reference tables (`lib/Packs.js`).
-  5. `NEOVIM`: Default upstream reference tables (`lib/Packs.js`).
-  6. `LazyVim`: Dynamic leader calibration & extra plugins via `bin/app-config-json`.
+- **Card Supply**: the compiled LazyVim pack (`lib/Packs.js`), calibrated live by `bin/app-config-json` — `mapleader`/`maplocalleader`, enabled `lazyvim.json` extras, and literal `lua/config/keymaps.lua` overrides. LazyVim cards are text-sequence judged; there is no keysym path.
+- **Decks**: the study scope is a deck, not the card supply. `lib/Decks.js` computes each deck live as `seed(corpus) ∪ added − removed` from declarations in `~/.config/omarchy/keycade/decks.json` (read-only to the app) plus bounded membership deltas in settings. The reserved `all` deck holds every eligible card; absent config falls back to four shipped starters.
+- **Guard Preflight**: `bin/keybinds-json --guard-status` is a read-only `hyprctl` check that Hyprland allows keybind grabbing; `lib/InputGuard.qml` refuses to launch without it.
 - **Input Isolation**: `lib/InputGuard.qml` manages Wayland `ShortcutInhibitor` so keypresses never leak to desktop apps during training.
-- **State Storage**: `lib/StateStore.qml` & `bin/state-store` use descriptor-relative atomic writes (0600 temp files + fsync + atomic rename).
+- **State Storage**: `lib/StateStore.qml` & `bin/state-store` use descriptor-relative atomic writes (0600 temp files + fsync + atomic rename). Only `settings.json`, `stats.json` and `session.json` exist.
 
 ---
 
