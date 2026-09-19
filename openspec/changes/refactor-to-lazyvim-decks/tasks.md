@@ -38,6 +38,6 @@
 ## 6. Fuzzing, Test Suites, and OpenSSF Verification
 
 - [x] 6.1 Retarget `tests/fuzz_keybinds.py` to fuzz `app-config-json.read_decks` against hostile JSON inputs while preserving `import atheris`, verifying `python3 tests/fuzz_keybinds.py -runs=1000` runs cleanly
-- [ ] 6.2 Update and run the full Python test suite, verifying all remaining and newly added tests pass: `python3 -m unittest discover -s tests -p "test_*.py"`
-- [ ] 6.3 Run QML algorithm tests with offscreen Qt6 runner: `QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/qml/tst_algorithms.qml -import /usr/lib/qt6/qml`
-- [ ] 6.4 Validate QML components with `qmllint Keycade.qml lib/*.qml` and verify OpenSSF Scorecard and review invariants (R1–R8) remain satisfied
+- [x] 6.2 Update and run the full Python test suite, verifying all remaining and newly added tests pass: `python3 -m unittest discover -s tests -p "test_*.py"`
+- [x] 6.3 Run QML algorithm tests with offscreen Qt6 runner: `QT_QPA_PLATFORM=offscreen /usr/lib/qt6/bin/qmltestrunner -input tests/qml/tst_algorithms.qml -import /usr/lib/qt6/qml`
+- [x] 6.4 Validate QML components with `qmllint Keycade.qml lib/*.qml` and verify OpenSSF Scorecard and review invariants (R1–R8) remain satisfied

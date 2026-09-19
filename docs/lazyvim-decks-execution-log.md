@@ -414,3 +414,69 @@ candidate also passed (206 Python plus all QML/integrations); logs:
   failure; no certification/status fields were fabricated or remotely changed.
 - These are baseline observations, **not** a remote score for the unpublished
   feature branch. No external issue, PR, remote metadata or repository was changed.
+
+## WP9 — final gate and full-change audit — PASS
+
+The orchestrator reran the complete gate on committed candidate `31bfb54`:
+
+- Python: **206 passed**.
+- QML: **179 passed** across core (73), decks (21), reader (56), guard (7) and
+  migrations (22), with no failed/skipped cases in these runs.
+- Atheris smoke: **1000 runs passed**.
+- Required qmllint command: exit 0, the same three metadata warnings recorded
+  at baseline. The broader CI lint command also exits 0; it additionally reports
+  the existing metadata warnings in AppConfigSource and InputProbe.
+- All four real Wayland shell integration scripts passed.
+- Pack and locale regeneration produced no tracked diff; strict OpenSpec
+  validation and whitespace checks passed. The integration worktree was clean.
+- All nine workflow action references remain full commit pins with version
+  comments; top-level permissions remain contents: read. New files are text,
+  not executable binaries. Manifest and Best Practices descriptions agree;
+  plugin identity/version/entrypoint/keepLoaded and MIT license are preserved.
+- `bin/state-store`, `lib/TextKey.js`, the LazyVim JSON corpus and frozen WP0
+  fixtures remain byte-identical to their respective baseline commits.
+
+### User-authorized native focus smoke
+
+The user approved two brief native overlay openings. A temporary copy added
+observation aliases only—no guard, panel, storage, engine or handler replacement.
+Both phases acquired real Wayland inhibition and keyboard focus and released
+both normally. Production Browse/curation and start handlers created a two-card
+run; a production answer handler completed one card, and a fresh Quickshell
+process resumed the exact remaining card, offset, score and global identity.
+No desktop key injection was used (text judging is separately tested), and all
+config/state/cache/data were synthetic temporary directories. No personal state
+or desktop configuration changed. Both windows closed automatically.
+
+Native evidence: `/tmp/keycade-lazyvim-decks-gates/wp9-native/report.json` and
+phase logs; other final gate logs: `wp9-final/`.
+
+### Challenger full-change audit
+
+Challenger `review-wp9-full` completed the full `80e6b79..31bfb54` audit and
+returned **COMPLETED PASS**, with no blocking or advisory findings. All **22
+requirements / 52 scenarios**, D1–D12 and R1–R8 have implementation and meaningful
+behavioral evidence. It independently reran 206 Python tests, 179 QML tests,
+fuzz 1000, required lint, strict OpenSpec and whole-change whitespace checks,
+and reviewed native/integration evidence, workflow pins/permissions, unchanged
+corpus/state-helper/text-judging seams, and the commit/scope ledger.
+
+All **26 actual task checkboxes** are now complete. No production code changed
+after the audited candidate; only this verification record and the final three
+task checkboxes were finalized. No pushes, PRs or external updates were made,
+and the OpenSpec change remains unarchived for the user's review.
+
+### Remaining notes (not unresolved implementation findings)
+
+- The required lint command still emits its three baseline Qt/Quickshell
+  metadata warnings while exiting 0; broader CI lint has the same metadata
+  warning classes in two additional existing components.
+- Old unreferenced screenshot assets and legacy screenshot-tool output names
+  remain; current README illustrations depict only LazyVim. Cosmetic helper
+  renaming and automatic downgrade compatibility are outside this change.
+- Native smoke exercised real inhibition/focus and production handlers, not
+  physical desktop key injection. Algorithm tests cover text-event judging.
+- Public OpenSSF ratings were verified for the published baseline. This local,
+  unpublished feature branch has not received a new remote score.
+- Agent configuration/skills under the original checkout's untracked `.pi/`
+  were not committed or removed. The feature worktree is retained for review.
