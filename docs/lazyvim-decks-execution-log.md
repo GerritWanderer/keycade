@@ -234,3 +234,34 @@ M1/M2 are closed, and the side lane is removed before WP4 as planned.
   Session.runId distinct from deck-local display numbers, and use the existing
   StateStore.setDeclaredDeckIds / setDeckCard interfaces. No new state kind or
   helper write path was introduced. Tasks 3.1–3.3 are complete.
+
+## WP5+6 — deck engine, scheduling and resume — PASS
+
+- `Decks.js` resolves starters / explicit declarations / malformed fallback,
+  pins all first, computes live seed union plus deltas after exclusions, and
+  exposes membership, other-deck and progress queries. Missing state is inert.
+- User corrected D5's mistaken assumption: the actual pack declares misc, so
+  custom keymaps participate normally in valid category/context seeds. The
+  approved clarification and corresponding risk wording are in design.md.
+- Scheduler uses explicit deck coverage cursors, proportional 10/6/6/2 shares,
+  due-first refill and unique initial deals of min(24, eligible). Remedial
+  behavior remains bounded; repeat-to-fill is gone.
+- Session schema 2 stores deck scope, global runId, local runNumber and
+  sessionSize. Legacy LazyVim sessions adapt to all without identity changes;
+  retired sessions remain inert and cannot impersonate named user decks.
+- User approved (and separately confirmed recording in D7) shrinking sessionSize
+  to completed offset plus remaining playable cards after exclusions/config
+  changes. Scores, results, history and original bounded plan targets survive;
+  unchanged resume is exact, with no phantom resume or zero-card celebration.
+- Keycade now exposes the engine APIs for subsequent UI packages and removes
+  the temporary schedulerStats bridge. Startup ordering, global identity
+  reservation and stats-before-session writes remain covered. Locale additions
+  are only the five previously frozen starter/all names; no new UI yet.
+- Orchestrator gate: **172 Python / 73 core QML / 21 deck QML / 56 reader /
+  7 guard / 22 migration**, fuzz 1000, lint exit 0 (baseline warnings), strict
+  validation, locale regeneration, frozen-fixture identity, whitespace checks
+  and four isolated Wayland integrations PASS. Five headless deck-session
+  integration cases run in the Python suite. Logs: `wp5-6/`.
+- Challenger **PASS**, no blocking or advisory findings. Tasks 2.4 and 4.1–4.3
+  complete; home list, curation drawer and dynamic HUD remain their assigned
+  later packages.

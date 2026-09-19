@@ -246,7 +246,8 @@ root = Path(sys.argv[1])
 state = root / "state/omarchy/keycade"
 session = json.loads((state / "session.json").read_text("utf-8"))
 original = json.loads((root / "session.json").read_text("utf-8"))
-assert session["profileId"] == "lazyvim" and session["runId"] == 5, session
+assert session["schemaVersion"] == 2 and session["deckId"] == "all" and session["runId"] == 5, session
+assert session["sessionSize"] == 11 and session["runNumber"] == 4, session
 for key in ("cards", "offset", "correct", "attempts", "newLearned", "masteredGained",
             "runReviewTarget", "runNewTarget", "pendingReinforcements", "reactions",
             "correctionRequired"):

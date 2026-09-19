@@ -14,7 +14,7 @@
 - [x] 2.1 Add `keycade` section with `.config/omarchy/keycade/decks.json` to `FILES` table in `bin/app-config-json`
 - [x] 2.2 Implement `read_decks(home, files)` in `bin/app-config-json` with R2 bounds checks (max 32 decks, ID regex `^[a-z][a-z0-9-]{0,31}$`, name <= 48 chars, closed seed vocabulary), verifying with dedicated unit tests
 - [x] 2.3 Add unit test suite `tests/test_decks_json.py` covering valid configs, missing files, malformed JSON, prototype pollution keys, duplicate and malformed ids, seed vocabulary rejections, and cap enforcement, verifying `python3 -m unittest discover -s tests -p "test_decks_json.py"` passes
-- [ ] 2.4 Compile the four shipped starter decks (Navigation, LSP & Diagnostics, Search & Find, Git) with `nameKey` localisation records, verifying each seed category resolves against the LazyVim pack
+- [x] 2.4 Compile the four shipped starter decks (Navigation, LSP & Diagnostics, Search & Find, Git) with `nameKey` localisation records, verifying each seed category resolves against the LazyVim pack
 
 ## 3. State Store and Schema Migrations
 
@@ -24,9 +24,9 @@
 
 ## 4. Dynamic Deck Evaluation and Scheduler Adaptation
 
-- [ ] 4.1 Implement deck definition and evaluation helper `lib/Decks.js` supporting compiled starter decks, exclusion filtering before seed evaluation (D12), and live computation formula `seed(corpus) ∪ added − removed`
-- [ ] 4.2 Update `lib/Scheduler.js` to key coverage cursor by `activeDeck` and scale session size to `min(24, eligible)` with proportional 10/6/6/2 queue distribution without duplicate card deals
-- [ ] 4.3 Update `lib/Session.js` to scope session resume state to `activeDeck` and respect dynamic session sizing bounds
+- [x] 4.1 Implement deck definition and evaluation helper `lib/Decks.js` supporting compiled starter decks, exclusion filtering before seed evaluation (D12), and live computation formula `seed(corpus) ∪ added − removed`
+- [x] 4.2 Update `lib/Scheduler.js` to key coverage cursor by `activeDeck` and scale session size to `min(24, eligible)` with proportional 10/6/6/2 queue distribution without duplicate card deals
+- [x] 4.3 Update `lib/Session.js` to scope session resume state to `activeDeck` and respect dynamic session sizing bounds
 
 ## 5. UI Refactoring and Curation Drawer
 

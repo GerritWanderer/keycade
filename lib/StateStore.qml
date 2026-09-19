@@ -110,8 +110,9 @@ Item {
       try {
         var before = root.stats.runSequence
         // Session.runId remains the persisted numeric identity. Reserve even
-        // an unresumable/abandoned legacy LazyVim session, never a foreign one.
-        if (root.session && root.session.profileId === "lazyvim")
+        // an unresumable/abandoned deck session (including undeclared decks)
+        // or legacy LazyVim session, never a retired-profile session.
+        if (Session.scope(root.session))
           Stats.adoptRunIdentity(root.stats, root.session.runId)
         root.runIdentityPrepared = true
         if (before !== root.stats.runSequence) {
@@ -225,7 +226,7 @@ Item {
         // Reject through the nonfatal session quarantine path. An invalid ID
         // is never adopted or clamped, and must not latch a storage failure
         // which would prevent that queued quarantine from ever running.
-        if (input && input.profileId === "lazyvim" && !Stats.validRunId(input.runId))
+        if (Session.scope(input) && !Stats.validRunId(input.runId))
           throw new Error("invalid run identity")
         var value = Session.sanitize(input)
         if (!value) throw new Error("unsupported session schema")
@@ -380,17 +381,18 @@ Item {
   }
 
   function saveSession(value) {
-    if (value && value.profileId === "lazyvim") {
+    var sanitized = Session.sanitize(value)
+    if (sanitized && Session.scope(sanitized)) {
       try {
         var before = root.stats.runSequence
-        Stats.adoptRunIdentity(root.stats, value.runId)
+        Stats.adoptRunIdentity(root.stats, sanitized.runId)
         if (before !== root.stats.runSequence) root.saveStats()
       } catch (identityError) {
         root.fail("Run identity is invalid or exhausted")
         return
       }
     }
-    root.session = Session.sanitize(value)
+    root.session = sanitized
     if (!root.session) {
       root.clearSession()
       return

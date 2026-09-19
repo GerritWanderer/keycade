@@ -11,6 +11,7 @@ import "lib/Profiles.js" as Profiles
 import "lib/Scheduler.js" as Scheduler
 import "lib/Stats.js" as Stats
 import "lib/Session.js" as Session
+import "lib/Decks.js" as Decks
 import "lib/Palettes.js" as Palettes
 import "lib/sources/pack/Eligibility.js" as PackEligibility
 
@@ -29,7 +30,14 @@ Item {
   property bool escapeDown: false
   property string requestedLocale: ""
 
-  property var eligibleBindings: []
+  property var eligibleBindings: [] // active deck's eligible members
+  property var eligibleCorpus: []
+  property var deckDefinitions: [] // final config only, never a loading fallback
+  property var deckProgress: Object.create(null)
+  property string deckConfigReason: ""
+  property int deckConfigRejected: 0
+  property string startRefusal: "" // bounded codes for the later home UI
+  property int sessionSize: 0
   property var deck: []
   property int cardIndex: 0
   property int runNumber: 1
@@ -99,10 +107,9 @@ Item {
   // Read-only readiness for non-interactive tooling; selecting another supply
   // is no longer available as a way to wait for persisted settings.
   readonly property bool stateReady: store.ready
-  // The corpus namespace stays LazyVim; current UI counters now belong to all.
-  // Deck selection/engine wiring replaces this temporary adapter in WP5/6.
+  // Supply identity never changes; the selected deck is a separate namespace.
   readonly property string profileId: "lazyvim"
-  readonly property string deckId: "all"
+  property string deckId: "all"
   property bool configOpened: false
   readonly property var availableProfiles: ["lazyvim"]
   readonly property var activeSource: packs
@@ -112,7 +119,7 @@ Item {
   readonly property int excludeStampMs: 900
   readonly property int maxOpenPayloadChars: 16 * 1024
   readonly property bool reducedMotion: Boolean(store.settings.reducedMotion)
-  readonly property int nextRunNumber: Stats.runsOf(store.stats, root.deckId) + 1
+  readonly property int nextRunNumber: Math.min(Stats.MAX_COUNTER, Stats.runsOf(store.stats, root.deckId) + 1)
   property int sessionRunIdentity: 0
   // Display/celebration counters stay deck-local. Scheduling and card history
   // use the reserved identity (or a read-only preview before a new session).
@@ -296,7 +303,11 @@ Item {
     var stored = Session.excludedSet(store.settings.excludedBindings, root.profileId)
     var stale = 0
     Object.keys(stored).forEach(function(id) { if (!matched[id]) stale += 1 })
-    root.eligibleBindings = result.eligible
+    root.eligibleCorpus = Decks.eligible(result.eligible, store.settings.excludedBindings)
+    root.eligibleBindings = root.cardsForDeck(root.deckId)
+    if (root.view === "playing")
+      root.sessionSize = root.runOffset + root.cardIndex
+          + Session.restoreCards(Session.cardsFrom(root.deck, root.cardIndex), root.eligibleBindings).length
     root.excludedRows = rows
     root.staleExcludedCount = stale
     // An exclusion can outlive the bind it names, so a config change between
@@ -305,7 +316,60 @@ Item {
     // stays reachable and starting a run is what gets refused instead.
     root.trainingLockedOut = !result.eligible.length && (rows.length > 0 || stale > 0)
     refreshProgressCounts()
+    root.startRefusal = root.eligibleBindings.length ? "" : "empty-deck"
     return result
+  }
+
+  // These APIs are shared by the later home list and curation drawer. Only
+  // declared decks are offered; retained orphan deltas/counters stay inert.
+  function cardsForDeck(id) {
+    return Decks.evaluate(Decks.find(root.deckDefinitions, id), root.eligibleCorpus,
+                          store.settings.deckCards, store.settings.excludedBindings)
+  }
+
+  function deckMembership(id, cardId) {
+    var card = null
+    for (var i = 0; i < root.eligibleCorpus.length; i++)
+      if (root.eligibleCorpus[i].id === cardId) { card = root.eligibleCorpus[i]; break }
+    return Decks.membership(Decks.find(root.deckDefinitions, id), card, store.settings.deckCards)
+  }
+
+  function otherDecks(cardId, targetId) {
+    return Decks.otherDecks(root.deckDefinitions, cardId, targetId, root.eligibleCorpus,
+                            store.settings.deckCards, store.settings.excludedBindings)
+  }
+
+  function setDeckCard(id, cardId, action) {
+    if (root.view === "playing" || !Decks.find(root.deckDefinitions, id)) return false
+    if (!store.setDeckCard(id, cardId, action)) return false
+    root.applyEligibility()
+    root.resumeAvailable = root.hasResumableSession()
+    root.adoptRunState()
+    return true
+  }
+
+  function selectDeck(id) {
+    if (root.view === "playing" || !store.ready || root.groundLoading
+        || !Decks.find(root.deckDefinitions, id)) return false
+    root.deckId = id
+    store.settings.activeDeck = id
+    store.settings = Object.assign({}, store.settings)
+    store.saveSettings()
+    root.applyEligibility()
+    root.resumeAvailable = root.hasResumableSession()
+    root.adoptRunState()
+    if (root.view === "summary" || root.view === "mastery") root.view = "home"
+    root.refreshProgressCounts()
+    return true
+  }
+
+  function reconcileDeckState() {
+    if (!store.ready || root.groundLoading || !root.deckDefinitions.length || root.view === "playing") return
+    var saved = store.settings.activeDeck
+    root.deckId = Decks.find(root.deckDefinitions, saved) ? saved : "all"
+    root.applyEligibility()
+    root.resumeAvailable = root.hasResumableSession()
+    root.adoptRunState()
   }
 
   function excludeCurrentBinding() {
@@ -356,27 +420,16 @@ Item {
   }
 
   function dropExcludedCard(bindingId) {
-    var removedBefore = 0
     var remaining = []
     for (var i = 0; i < root.deck.length; i++) {
-      if (root.deck[i].binding.id === bindingId) {
-        if (i < root.cardIndex) removedBefore += 1
-        continue
-      }
+      if (i >= root.cardIndex && root.deck[i].binding.id === bindingId) continue
       remaining.push(root.deck[i])
     }
     root.deck = remaining
-    root.cardIndex = Math.max(0, root.cardIndex - removedBefore)
     root.setReinforcementPending(bindingId, false)
-    // The miss that led here stays in stats - it happened - but the run's own
-    // tally drops the row, so an excluded bind cannot head the review list.
-    if (root.runResults[bindingId]) {
-      var results = Session.safeMap()
-      Object.keys(root.runResults).forEach(function(key) {
-        if (key !== bindingId) results[key] = root.runResults[key]
-      })
-      root.runResults = results
-    }
+    // Recall history and score/results describe what happened, not the live
+    // denominator. Keep them; only playable cards and sessionSize shrink.
+    root.sessionSize = root.runOffset + root.deck.length
   }
 
   // Restoring is offered while idle only: putting a bind back mid-run would
@@ -391,6 +444,7 @@ Item {
     store.saveSettings()
     root.applyEligibility()
     root.resumeAvailable = root.hasResumableSession()
+    root.adoptRunState()
   }
 
   // Entries whose bind no longer exists cannot be shown or restored, but they
@@ -460,14 +514,6 @@ Item {
   // before that would keep pointing at a detached copy of the defaults.
   function profileCounters() { return Stats.counters(store.stats, root.deckId) }
 
-  // Scheduler still discovers its counter key from the corpus prefix until
-  // WP5. This temporary view shares only all's live record, not foreign state.
-  function schedulerStats() {
-    var counters = Session.safeMap()
-    counters[root.profileId] = Stats.ensureCounters(store.stats, root.deckId)
-    return { bindings: store.stats.bindings, decks: counters }
-  }
-
   function detectedOptions() {
     return appConfig.options || ({})
   }
@@ -480,13 +526,11 @@ Item {
   // The reader answered; calibrate the shipped table with the same extras,
   // literal keymaps and leaders as before. No external table replaces it.
   function applyDetectedConfig() {
-    var config = appConfig.deckConfig
-    var ids = ["all"]
-    if (config.status === "absent") ids = ids.concat(["navigation", "lsp", "search", "git"])
-    else if (config.status === "valid") {
-      for (var index = 0; index < config.decks.length; index++) ids.push(config.decks[index].id)
-    }
-    store.setDeclaredDeckIds(ids)
+    var resolved = Decks.definitions(appConfig.deckConfig)
+    root.deckDefinitions = resolved.decks
+    root.deckConfigReason = resolved.reason
+    root.deckConfigRejected = resolved.rejected
+    store.setDeclaredDeckIds(Decks.ids(root.deckDefinitions))
     packs.profileId = root.profileId
     packs.options = root.profileOptions()
     packs.enabledExtras = appConfig.extras
@@ -499,6 +543,7 @@ Item {
   // arrived before the home screen did.
   function groundReady() {
     root.groundLoading = false
+    root.reconcileDeckState()
     root.applyEligibility()
     root.resumeAvailable = root.hasResumableSession()
     root.adoptRunState()
@@ -512,11 +557,8 @@ Item {
   // anything to teach at all, and whether finishing it earned the one-time
   // celebration. Shared by the cold start and by picking another cabinet.
   function settleGround() {
-    if (!root.eligibleBindings.length && !root.trainingLockedOut) {
-      root.errorMessage = i18n.t("noBindings")
-      guard.fail(root.errorMessage)
-      return false
-    }
+    // Empty collections stay reachable for curation; never fail the guard.
+    if (!root.eligibleBindings.length) { root.startRefusal = "empty-deck"; return true }
     checkFirstMastery(root.nextRunNumber)
     var counters = root.profileCounters()
     if (!root.resumeAvailable && Number(counters.firstMasteryAt || 0) > 0
@@ -546,7 +588,8 @@ Item {
     root.runOffset = session ? Math.max(0, Math.min(root.runCardLimit - 1,
                                                    Number(session.offset || 0))) : 0
     root.sessionRunIdentity = session ? session.runId : 0
-    root.runNumber = root.nextRunNumber
+    root.sessionSize = session ? Session.resumedSize(session, root.eligibleBindings) : 0
+    root.runNumber = session && session.runNumber ? session.runNumber : root.nextRunNumber
     root.correct = session ? Math.max(0, Number(session.correct || 0)) : 0
     root.attempts = session ? Math.max(0, Number(session.attempts || 0)) : 0
     root.newLearned = session ? Math.max(0, Number(session.newLearned || 0)) : 0
@@ -560,7 +603,8 @@ Item {
     var pending = session && Array.isArray(session.pendingReinforcements)
         ? session.pendingReinforcements : []
     for (var index = 0; index < pending.length; index++)
-      root.setReinforcementPending(String(pending[index]), true)
+      if (root.eligibleBindings.some(function(card) { return card.id === pending[index] }))
+        root.setReinforcementPending(String(pending[index]), true)
     root.combo = 0
     root.energy = 1
   }
@@ -593,6 +637,12 @@ Item {
 
   function refreshProgressCounts() {
     root.progressCounts = Stats.counts(store.stats, root.eligibleBindings, Date.now(), root.activeRunId)
+    var progress = Session.safeMap()
+    root.deckDefinitions.forEach(function(definition) {
+      progress[definition.id] = Decks.progress(definition, root.eligibleCorpus, store.settings.deckCards,
+          store.settings.excludedBindings, store.stats, Date.now(), root.activeRunId)
+    })
+    root.deckProgress = progress
     // Current progress follows exclusions/extras, never stale written totals.
     root.refreshGroundProgress()
   }
@@ -656,7 +706,7 @@ Item {
     // independently counted model may end the active run.
     if (root.progressCounts.total <= 0
         || root.progressCounts.mastered !== root.progressCounts.total) return false
-    checkFirstMastery(root.nextRunNumber)
+    checkFirstMastery(root.runNumber)
     var counters = root.profileCounters()
     if (Number(counters.firstMasteryAt || 0) <= 0
         || Boolean(counters.firstMasteryCelebrated)) return false
@@ -695,11 +745,11 @@ Item {
   }
 
   function completedCardCount() {
-    if (root.view === "summary") return root.runCardLimit
+    if (root.view === "summary") return root.sessionSize
     var completed = root.runOffset + root.cardIndex
     if (root.view === "playing" && root.cardLocked && !root.correctionRequired
         && root.feedbackKind === "hit") completed += 1
-    return Math.max(0, Math.min(root.runCardLimit, completed))
+    return Math.max(0, Math.min(root.sessionSize, completed))
   }
 
   function pendingReinforcementCount() {
@@ -721,12 +771,12 @@ Item {
     return Boolean(store.ready && session && Stats.validRunId(session.runId)
         && session.runId <= Stats.sequenceValue(store.stats.runSequence)
         && Session.canResume(session, session.runId, root.eligibleBindings,
-                             root.runCardLimit, root.profileId))
+                             root.runCardLimit, root.deckId))
   }
 
   // Reserve and queue the high-water write before any new session snapshot.
   // An abandoned deal still consumes its identity; deck counters move only
-  // when a run finishes. WP5/6 supplies the chosen deck independently.
+  // when a run finishes. The chosen deck never supplies this identity.
   function allocateSessionIdentity() {
     if (!store.ready) return 0
     try {
@@ -747,15 +797,20 @@ Item {
     var resumeIndex = root.cardIndex
     var resumeCorrection = root.correctionRequired
     if (root.cardLocked && !root.correctionRequired && root.feedbackKind === "hit") resumeIndex += 1
-    var cards = Session.cardsFrom(root.deck, resumeIndex)
+    var cards = Session.cardsFrom(root.deck, resumeIndex).filter(function(card) {
+      return root.eligibleBindings.some(function(binding) { return binding.id === card.bindingId })
+    })
+    root.sessionSize = root.runOffset + resumeIndex + cards.length
     if (!cards.length) {
       store.clearSession()
       root.resumeAvailable = false
       return
     }
     store.saveSession({
-      schemaVersion: 1,
-      profileId: root.profileId,
+      schemaVersion: 2,
+      deckId: root.deckId,
+      sessionSize: root.runOffset + resumeIndex + cards.length,
+      runNumber: root.runNumber,
       runId: root.sessionRunIdentity,
       offset: root.runOffset + resumeIndex,
       cards: cards,
@@ -768,14 +823,15 @@ Item {
       pendingReinforcements: Object.keys(root.pendingReinforcements || {}),
       reactions: root.reactions,
       runResults: Session.serializableResults(root.runResults),
-      correctionRequired: resumeCorrection && resumeIndex === root.cardIndex,
+      correctionRequired: resumeCorrection && resumeIndex === root.cardIndex
+          && cards[0].bindingId === root.currentBinding.id,
       savedAt: Date.now()
     })
     root.resumeAvailable = true
   }
 
   function resumeRun() {
-    if (!root.resumeAvailable || !guard.active || root.groundLoading) return
+    if (!root.hasResumableSession() || !guard.active || root.groundLoading || root.view === "playing") return
     var session = store.session
     var offset = Math.max(0, Math.min(root.runCardLimit - 1, Number(session.offset || 0)))
     var restoredDeck = Session.restoreCards(session.cards, root.eligibleBindings)
@@ -797,7 +853,8 @@ Item {
     root.deck = restoredDeck
     root.cardIndex = 0
     root.runOffset = offset
-    root.runNumber = root.nextRunNumber
+    root.sessionSize = offset + restoredDeck.length
+    root.runNumber = session.runNumber || root.nextRunNumber
     root.correct = Math.max(0, Number(session.correct || 0))
     root.attempts = Math.max(0, Number(session.attempts || 0))
     root.newLearned = Math.max(0, Number(session.newLearned || 0))
@@ -810,13 +867,14 @@ Item {
     root.pendingReinforcements = Session.safeMap()
     var pendingIds = Array.isArray(session.pendingReinforcements) ? session.pendingReinforcements : []
     for (var pendingIndex = 0; pendingIndex < pendingIds.length; pendingIndex++)
-      root.setReinforcementPending(String(pendingIds[pendingIndex]), true)
+      if (root.eligibleBindings.some(function(card) { return card.id === pendingIds[pendingIndex] }))
+        root.setReinforcementPending(String(pendingIds[pendingIndex]), true)
     root.reactions = Array.isArray(session.reactions) ? session.reactions : []
     root.runResults = Session.restoreResults(session.runResults, root.eligibleBindings)
     root.reviewSuggestions = []
     root.activeSegmentStartedAt = Date.now()
     root.view = "playing"
-    showCard(Boolean(session.correctionRequired))
+    showCard(Session.resumeCorrection(session, restoredDeck))
   }
 
   function startPrimary() {
@@ -828,8 +886,9 @@ Item {
     if (root.view !== "home" && root.view !== "summary") return
     // The home screen stays up while a cabinet loads, so START can be reached
     // before the table it would deal from has arrived.
-    if (root.groundLoading) return
-    if (root.trainingLockedOut) return
+    if (root.groundLoading || !store.ready) return
+    if (!root.eligibleBindings.length) { root.startRefusal = "empty-deck"; return }
+    root.startRefusal = ""
     if (!guard.active) {
       guard.fail("Shortcut inhibition is not active.")
       return
@@ -839,8 +898,9 @@ Item {
     store.clearSession()
     root.resumeAvailable = false
     root.runNumber = root.nextRunNumber
-    root.deck = Scheduler.build(root.eligibleBindings, root.schedulerStats(), root.runCardLimit,
-                                { runId: root.activeRunId, profile: root.profileId })
+    root.deck = Scheduler.build(root.eligibleBindings, store.stats, root.runCardLimit,
+                                { runId: root.activeRunId, deckId: root.deckId })
+    root.sessionSize = root.deck.length
     var plan = Scheduler.planCounts(root.deck)
     root.runReviewTarget = plan.review
     root.runNewTarget = plan.added
@@ -885,7 +945,7 @@ Item {
     root.lastCountdownBeat = 0
     root.countdownSeconds = 0
     if (root.currentCard.queue === "unseen") {
-      Scheduler.markCovered(root.eligibleBindings, root.schedulerStats(), root.currentBinding.id)
+      Scheduler.markCovered(root.eligibleBindings, store.stats, root.currentBinding.id, root.deckId)
       store.saveStats()
     }
     if (resumeCorrection) {
@@ -1086,7 +1146,9 @@ Item {
     // runs. This visible number is deliberately not the scheduling identity.
     Stats.completeRun(store.stats, root.deckId)
     store.stats = Object.assign({}, store.stats)
-    var resultRows = Object.keys(root.runResults).map(function(id) { return root.runResults[id] })
+    var resultRows = Object.keys(root.runResults).filter(function(id) {
+      return root.eligibleBindings.some(function(binding) { return binding.id === id })
+    }).map(function(id) { return root.runResults[id] })
     resultRows.sort(function(left, right) {
       if (left.misses !== right.misses) return right.misses - left.misses
       return Stats.percentile75(right.reactions) - Stats.percentile75(left.reactions)
@@ -1131,7 +1193,10 @@ Item {
   }
   StateStore {
     id: store
-    onReadyChanged: root.maybeShowHome()
+    onReadyChanged: {
+      root.reconcileDeckState()
+      root.maybeShowHome()
+    }
     onFailed: function(message) {
       root.errorMessage = message
       guard.fail(message)

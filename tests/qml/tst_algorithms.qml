@@ -563,7 +563,7 @@ TestCase {
     compare(migrated.bindings["hyprland/safe"].firstTryCorrect, 1000000000)
   }
 
-  function test_schedulerSpreadsRepeatedBindingsAndAvoidsAdjacentRepeats() {
+  function test_schedulerSmallDeckDealsEachBindingExactlyOnce() {
     var bindings = []
     for (var index = 0; index < 8; index++) {
       var item = binding({ key: String(index), arg: String(index), description: "Switch to workspace " + index })
@@ -571,12 +571,12 @@ TestCase {
       bindings.push(item)
     }
     var deck = Scheduler.build(bindings, Stats.defaults(), 24)
-    compare(deck.length, 24)
+    compare(deck.length, 8)
     for (var i = 1; i < deck.length; i++) verify(deck[i].binding.id !== deck[i - 1].binding.id)
     var counts = {}
     for (var j = 0; j < deck.length; j++)
       counts[deck[j].binding.id] = Number(counts[deck[j].binding.id] || 0) + 1
-    for (var id in counts) compare(counts[id], 3)
+    for (var id in counts) compare(counts[id], 1)
   }
 
   function test_schedulerBalancesCategoriesAcrossTheRun() {
@@ -632,12 +632,12 @@ TestCase {
 
     var seen = {}
     for (var run = 1; run <= 5; run++) {
-      var deck = Scheduler.build(bindings, stats, 24, { now: now, runId: run })
+      var deck = Scheduler.build(bindings, stats, 24, { now: now, runId: run, deckId: "coverage" })
       var unseenCards = deck.filter(function(card) { return card.queue === "unseen" })
       compare(unseenCards.length, 6)
       unseenCards.forEach(function(card) {
         seen[card.binding.id] = true
-        Scheduler.markCovered(bindings, stats, card.binding.id)
+        Scheduler.markCovered(bindings, stats, card.binding.id, "coverage")
         Stats.recordGuided(stats, card.binding.id, run, now)
         stats.bindings[card.binding.id].dueRun = 99
       })
@@ -654,9 +654,10 @@ TestCase {
       bindings.push(item)
     }
     var deck = Scheduler.build(bindings, stats, 8, { now: 100, runId: 1 })
+    compare(Stats.counters(stats, "coverage").coverageCursor, 0)
+    Scheduler.markCovered(bindings, stats, deck[0].binding.id, "coverage")
+    verify(Stats.counters(stats, "coverage").coverageCursor !== 0)
     compare(Stats.counters(stats, "hyprland").coverageCursor, 0)
-    Scheduler.markCovered(bindings, stats, deck[0].binding.id)
-    verify(Stats.counters(stats, "hyprland").coverageCursor !== 0)
   }
 
   function test_schedulerPrioritizesDueBeforeMaintenance() {
@@ -746,36 +747,35 @@ TestCase {
 
   function test_savedSessionRestoresRemainingCardsAndCorrection() {
     var first = binding({ key: "1", arg: "1", description: "First" })
-    first.id = "hyprland/first"
+    first.id = "lazyvim/first"
     var second = binding({ key: "2", arg: "2", description: "Second" })
-    second.id = "hyprland/second"
+    second.id = "lazyvim/second"
     var deck = [
       { binding: first, tier: "learning", queue: "due", remedial: false },
       { binding: second, tier: "learning", queue: "remedial", remedial: true }
     ]
     var cards = Session.cardsFrom(deck, 1)
     compare(cards.length, 1)
-    compare(cards[0].bindingId, "hyprland/second")
+    compare(cards[0].bindingId, "lazyvim/second")
     verify(cards[0].remedial)
     var saved = {
-      schemaVersion: 1, profileId: "hyprland", runId: 4, cards: cards, correctionRequired: true
+      schemaVersion: 1, profileId: "lazyvim", runId: 4, cards: cards, correctionRequired: true
     }
-    verify(Session.canResume(saved, 4, [first, second], 24, "hyprland"))
-    verify(!Session.canResume(saved, 5, [first, second], 24, "hyprland"))
-    // A run belongs to the ground it was played on.
+    verify(Session.canResume(saved, 4, [first, second], 24, "all"))
+    verify(!Session.canResume(saved, 5, [first, second], 24, "all"))
+    // A legacy LazyVim run maps only to all, not any similarly named deck.
     verify(!Session.canResume(saved, 4, [first, second], 24, "lazyvim"))
     saved.offset = 24
-    verify(!Session.canResume(saved, 4, [first, second], 24, "hyprland"))
+    verify(!Session.canResume(saved, 4, [first, second], 24, "all"))
     var restored = Session.restoreCards(cards, [first, second])
     compare(restored.length, 1)
-    compare(restored[0].binding.id, "hyprland/second")
+    compare(restored[0].binding.id, "lazyvim/second")
     verify(restored[0].remedial)
   }
 
-  // A run interrupted before training grounds existed still resumes after the
-  // upgrade: its ids name no ground, and everything stored back then was
-  // played on the default one.
-  function test_sessionsSavedBeforeProfilesStillResume() {
+  // Pre-profile sessions keep their historical namespace, but cannot resume
+  // into a user deck named after that retired ground.
+  function test_sessionsSavedBeforeProfilesRemainInert() {
     var first = binding({ key: "1", arg: "1", description: "First" })
     first.id = "hyprland/first"
     var sanitized = Session.sanitize({
@@ -793,7 +793,7 @@ TestCase {
     compare(sanitized.currentBindingId, "hyprland/first")
     compare(sanitized.pendingReinforcements[0], "hyprland/first")
     compare(sanitized.runResults["hyprland/first"].misses, 2)
-    verify(Session.canResume(sanitized, 4, [first], 24, "hyprland"))
+    verify(!Session.canResume(sanitized, 4, [first], 24, "hyprland"))
     verify(!Session.canResume(sanitized, 4, [first], 24, "lazyvim"))
     compare(sanitized.runResults["lazyvim/first"], undefined)
 
@@ -1702,7 +1702,7 @@ TestCase {
     testPack.refresh()
     var stats = Stats.defaults()
     var deck = Scheduler.build(testPack.bindings, stats, 24,
-                               { now: 1000, runId: 1, profile: "lazyvim" })
+                               { now: 1000, runId: 1, deckId: "all" })
     compare(deck.length, 24)
     for (var index = 0; index < deck.length; index++)
       compare(Profiles.profileOf(deck[index].binding.id), "lazyvim")
@@ -1717,13 +1717,13 @@ TestCase {
 
     Stats.recordGuided(stats, deck[0].binding.id, 1, 1000)
     Stats.recordFirstTry(stats, deck[0].binding.id, true, 900, 1, 2000)
-    Scheduler.markCovered(testPack.bindings, stats, deck[0].binding.id)
-    Stats.completeRun(stats, "lazyvim")
+    Scheduler.markCovered(testPack.bindings, stats, deck[0].binding.id, "all")
+    Stats.completeRun(stats, "all")
 
-    // The Hyprland ground's counters are untouched by any of it.
-    compare(Stats.runsOf(stats, "lazyvim"), 1)
+    // The retired ground's counters are untouched by any of it.
+    compare(Stats.runsOf(stats, "all"), 1)
     compare(Stats.runsOf(stats, "hyprland"), 0)
-    verify(Stats.counters(stats, "lazyvim").coverageCursor !== 0)
+    verify(Stats.counters(stats, "all").coverageCursor !== 0)
     compare(Stats.counters(stats, "hyprland").coverageCursor, 0)
     compare(Object.keys(stats.bindings)[0].slice(0, 8), "lazyvim/")
   }

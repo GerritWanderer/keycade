@@ -319,6 +319,45 @@ Scope {
                     self.assertEqual(len(quarantined), 1, disk.keys())
                     self.assertEqual(json.loads(disk[quarantined[0]]), pending)
 
+    def test_deck_scoped_session_reserves_identity_even_if_declaration_is_missing(self):
+        pending = {"schemaVersion": 2, "deckId": "missing-deck", "runId": 77,
+                   "runNumber": 1, "sessionSize": 1, "offset": 0,
+                   "cards": [{"bindingId": "lazyvim/normal/<leader>ff", "tier": "learning", "queue": "due"}],
+                   "correct": 0, "attempts": 0, "newLearned": 0, "masteredGained": 0,
+                   "runReviewTarget": 1, "runNewTarget": 0}
+        for early in (False, True):
+            with self.subTest(early=early):
+                report, disk = self.exercise(fixture("settings-v4.json"), '''
+                  root.check(store.stats.runSequence === 77, "deck identity reserved before readiness")
+                  root.check(Stats.peekRunIdentity(store.stats) === 78, "no orphan-session identity reuse")
+                  root.check(store.session.deckId === "missing-deck", "undeclared session retained")
+                ''', stats=fixture("stats-v5.json"), session=pending,
+                    early_declarations=early, relaunch=True)
+                self.assertEqual(report["relaunch"]["stats"]["runSequence"], 77)
+                self.assertEqual(json.loads(disk["stats.json"])["runSequence"], 77)
+                self.assertEqual(json.loads(disk["session.json"]), pending)
+
+    def test_hostile_deck_session_identity_uses_nonfatal_quarantine_and_recovery(self):
+        for early in (False, True):
+            for identity in (0, -1, 1.5, "17", 1000000001, None, True):
+                with self.subTest(early=early, identity=identity):
+                    pending = {"schemaVersion": 2, "deckId": "zz-declared", "runId": identity,
+                               "runNumber": 1, "sessionSize": 0, "offset": 0, "cards": [],
+                               "correct": 0, "attempts": 0, "newLearned": 0, "masteredGained": 0,
+                               "runReviewTarget": 0, "runNewTarget": 0}
+                    report, disk = self.exercise(fixture("settings-v4.json"), '''
+                      root.check(store.ready && !store.error && !store.session, "nonfatal quarantine")
+                      root.check(store.stats.runSequence === 7, "invalid identity not adopted")
+                    ''', stats=fixture("stats-v5.json"), session=pending,
+                        early_declarations=early, relaunch=True)
+                    self.assertTrue(report["sessionCorrupt"])
+                    self.assertFalse(report["relaunch"]["sessionCorrupt"])
+                    self.assertEqual(report["stats"], fixture("stats-v5.json"))
+                    self.assertNotIn("session.json", disk)
+                    quarantines = [name for name in disk if name.startswith("session.json.corrupt-")]
+                    self.assertEqual(len(quarantines), 1)
+                    self.assertEqual(json.loads(disk[quarantines[0]]), pending)
+
     def test_invalid_current_stats_shape_is_quarantined(self):
         report, disk = self.exercise(fixture("settings-v4.json"),
                                     stats={"schemaVersion": 5, "bindings": {}, "decks": []})

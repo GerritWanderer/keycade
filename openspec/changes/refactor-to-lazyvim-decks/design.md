@@ -81,7 +81,7 @@ The `extras` key is what makes a plugin deck a single line and has no dependence
 
 A card literal in `decks.json` would assert that a mapping exists with nothing to verify it against; a typo would be drilled forever. A `vim.keymap.set` line *creates* the mapping it teaches, so the two cannot drift. Since the plugin supplies no usable `desc` either way, the user authors a description in both designs — authoring it as a real keymap costs the same keystrokes and yields a mapping that exists.
 
-*Consequence:* such cards land in `category: "misc"` and are therefore unreachable by a category seed. They are hand-added, so this is acceptable.
+*Consequence:* such cards land in `category: "misc"`, which the shipped pack declares. They participate in normal category and context seed matching like every other eligible corpus card; they are not restricted to manual assignment. Browse-and-pick remains available for finer-grained collections. No special-case exclusion of custom cards is applied during seed evaluation.
 
 ### D6 — Curation needs a browse-and-pick surface, not only a play-time gesture
 
@@ -104,7 +104,9 @@ A card may belong to multiple decks simultaneously (1:N mapping, D8).
 
 `Scheduler.build` currently allocates a fixed `10/6/6/2` across due, unseen, weak and maintenance to reach 24, then fills any shortfall from `chooseFallback`, which permits repeats. On a five-card deck that deals the same five cards roughly five times in one run — drilling, not spaced repetition.
 
-Session length becomes `min(24, eligible)`, the queue split scales proportionally with the remainder going to `due`, and no card appears twice in a run except as a remedial insert. `Session.MAX_CARDS` remains 24 as the upper bound that resume validates against.
+The initial session length becomes `min(24, eligible)`, the queue split scales proportionally with the remainder going to `due`, and no card appears twice in a run except as a remedial insert. `Session.MAX_CARDS` remains 24 as the upper bound that resume validates against.
+
+After exclusions or configuration changes remove cards, `sessionSize` becomes the completed offset plus the remaining playable cards. Score, results, recall history and the original bounded new/review targets are preserved, even when those targets exceed the reduced size. An unchanged resume retains its exact queue and score. Zero remaining cards do not create a phantom resume or a zero-card mastery celebration.
 
 At `eligible == 0` — an unseeded deck nobody has curated yet — the deck row reports zero cards and starting is refused with a hint rather than opening a run with nothing in it. The deck stays listed, because it is the row the user needs in order to find the deck in the drawer and fill it.
 
@@ -212,7 +214,7 @@ An addition that would carry `deckCards` past its cap is refused and surfaced, l
 - **A live seed can shrink a deck silently** when an extra is switched off in `lazyvim.json`. → Deck rows show a card count, and deltas for the vanished cards are retained, so switching the extra back on restores the deck exactly.
 - **Roughly half the Python test suite is deleted**, in code paths that carry R7 trusted-command logic. → The `--guard-status` tests in `test_keybinds_json.py` are retained rather than deleted with the file, and are the acceptance gate for the reduced helper.
 - **Two schema migrations land at once** (settings and stats). → Both are additive-plus-rename with no card-level deletion (D10); the existing quarantine path in `StateStore` already handles a file that fails to parse.
-- **Cards from `keymaps.lua` are invisible to category seeds** because they default to `category: "misc"`. → Accepted; they are hand-added by definition.
+- **Cards from `keymaps.lua` default to the broad `misc` category rather than plugin-specific categories.** → They can be collected by valid `misc` or context seeds, while browse-and-pick supports finer-grained manual assignment. The same seed formula applies to custom and packaged cards.
 - **Deck state does not survive a downgrade.** → Card history does, which is the part that took months to earn. Deck definitions are a config file the user still has.
 
 ## Migration Plan

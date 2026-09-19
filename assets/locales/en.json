@@ -1,5 +1,10 @@
 {
   "accuracy": "ACCURACY",
+  "deckAll": "All",
+  "deckNavigation": "Navigation",
+  "deckLsp": "LSP & Diagnostics",
+  "deckSearch": "Search & Find",
+  "deckGit": "Git",
   "acquiring": "SECURING INPUT",
   "again": "ENTER TO PLAY AGAIN",
   "allExcluded": "EVERY SHORTCUT IS EXCLUDED",

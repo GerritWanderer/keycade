@@ -1,5 +1,10 @@
 {
   "accuracy": "准确率",
+  "deckAll": "全部",
+  "deckNavigation": "导航",
+  "deckLsp": "LSP 与诊断",
+  "deckSearch": "搜索与查找",
+  "deckGit": "Git",
   "acquiring": "正在保护输入",
   "again": "按回车再来一局",
   "allExcluded": "全部快捷键都已排除",
