@@ -47,6 +47,12 @@ CHILD_ENVIRONMENT_KEYS = ("HYPRLAND_INSTANCE_SIGNATURE", "XDG_RUNTIME_DIR")
 # later cannot slip through the way it would past a chased blacklist.
 HELPER_ENVIRONMENT_KEYS = ("PATH", "HYPRLAND_INSTANCE_SIGNATURE", "XDG_RUNTIME_DIR")
 PR_SET_PDEATHSIG = 1
+# The helper's own PID, captured before any child is forked. A child reads its
+# parent back only after the fork, and by then the answer may already be an
+# adoptive parent - init or a subreaper - because the helper died in between.
+# Comparing against the identity captured here closes that race; reading the
+# parent for the first time inside the child cannot.
+_HELPER_PID = os.getpid()
 
 
 def trusted_command(path: str) -> str:
@@ -82,20 +88,23 @@ def child_environment() -> dict[str, str]:
 
 
 def _prepare_child() -> None:
-    # Start a new session so the helper can signal the child's whole group, and
-    # ask the kernel to kill the child if this helper dies first. A child that
+    # Start a new session so the helper can signal the child's whole group.
+    os.setsid()
+    # Before anything is armed: a helper that already died means this child
+    # was adopted, and the parent it reads back is not the helper's.
+    if os.getppid() != _HELPER_PID:
+        os._exit(1)
+    # Ask the kernel to kill the child if the helper dies first. A child that
     # cannot arm the death signal must never exec: anything failing here
     # raises, which fails the spawn instead of leaving a running child behind
     # that nothing can reap.
-    os.setsid()
-    parent = os.getppid()
     libc = ctypes.CDLL(trusted_command(LIBC_PATH), use_errno=True)
     if libc.prctl(PR_SET_PDEATHSIG, signal.SIGKILL) != 0:
         raise OSError(ctypes.get_errno(), "prctl(PR_SET_PDEATHSIG) failed")
-    # The helper died between the fork and the prctl above, so the death
-    # signal can never fire; the tell is a new parent. Leave before exec
-    # rather than run unguarded.
-    if os.getppid() != parent:
+    # The helper died between the fork and the arming above: the death signal
+    # is then armed against the adoptive parent and never fires for the
+    # helper. Leave before exec rather than run unguarded.
+    if os.getppid() != _HELPER_PID:
         os._exit(1)
 
 

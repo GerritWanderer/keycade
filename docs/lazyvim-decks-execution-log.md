@@ -327,3 +327,34 @@ M1/M2 are closed, and the side lane is removed before WP4 as planned.
   checks PASS. Logs: `wp7c/`.
 - Initial Challenger provider stream failed without a verdict; the resumed
   review returned **PASS**, no findings. Task 5.4 complete.
+
+## Final R8 invariant correction — PASS
+
+While WP8 was in progress, the orchestrator independently reproduced two
+retained-helper failures using isolated, fully reaped test processes:
+
+- Killing the helper before the child's first parent-ID read allowed the child
+  to execute after adoption by a subreaper (both guard helper and relay).
+- A normal relay exit could leave a grandchild running after its leader exited.
+
+The user explicitly authorized narrow guard/relay hardening and the proposal's
+R8 impact correction. The owning helper worker changed only the two helpers and
+their two Python test files. Both now capture the expected helper PID before
+fork and check it before and after mandatory, checked PDEATHSIG arming. The relay
+also kills/reaps its group, closes resources and resets its child reference on
+every post-spawn exit, including success and injected faults. CLI behavior,
+trusted commands/libraries, caller environment, budgets and forwarding remain.
+
+Nine substantive regressions cover the real early-parent-death race, no-exec
+arming failures, normal descendant cleanup and stream faults. Their mutation
+check fails against the old helpers. The orchestrator's three original probes
+now report no post-parent-death execution and no surviving relay descendant.
+Challenger returned **PASS**, no findings.
+
+To keep the security commit independently green despite pending UI/doc changes,
+the orchestrator exported the committed tree, applied only this reviewed security
+patch and proposal note, and ran the complete gate there: **195 Python** plus all
+five QML suites, lint, fuzz 1000, strict validation and diff checks PASS. No test
+commit was created in that temporary verification tree. The combined pending
+candidate also passed (206 Python plus all QML/integrations); logs:
+`r8-isolated/`, `m6-candidate/`, and `wp8-docs-fixed/` under the gate directory.

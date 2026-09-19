@@ -16,6 +16,91 @@ from unittest import mock
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "bin" / "keybinds-json"
 
+# Drives the parent-death race against the real production spawn path of
+# either helper: patches the module's os.getppid with a barrier (the
+# _prepare_child signature stays untouched) and its subprocess.Popen only to
+# pass the barrier's pipes through, then SIGKILLs the helper mid-barrier.
+PARENT_DEATH_CONTROLLER = r"""
+import ctypes
+import os
+import selectors
+import signal
+import subprocess
+import sys
+
+# The controller owns and reaps every process in this test; the child only
+# writes an observation to a private pipe and exits.
+libc = ctypes.CDLL('/usr/lib/libc.so.6', use_errno=True)
+if libc.prctl(36, 1) != 0:  # PR_SET_CHILD_SUBREAPER
+    raise OSError(ctypes.get_errno(), 'subreaper setup failed')
+ready_r, ready_w = os.pipe()
+go_r, go_w = os.pipe()
+helper_code = r'''
+import importlib.machinery, os, sys
+module = importlib.machinery.SourceFileLoader('guard_probe', sys.argv[1]).load_module()
+ready, go = int(sys.argv[2]), int(sys.argv[3])
+getppid, popen = module.os.getppid, module.subprocess.Popen
+observed = False
+def delayed_parent_read():
+    global observed
+    if not observed:
+        observed = True
+        os.write(ready, ('FORKED %d\n' % os.getpid()).encode())
+        os.read(go, 1)
+    return getppid()
+def spawn(*args, **kwargs):
+    kwargs['pass_fds'] = (ready, go)
+    return popen(*args, **kwargs)
+module.os.getppid = delayed_parent_read
+module.subprocess.Popen = spawn
+command = [sys.executable, '-c',
+    'import os,sys; os.write(int(sys.argv[1]), b"EXECUTED_AFTER_PARENT_DEATH\\n")', str(ready)]
+if hasattr(module, 'command_output'):
+    module.command_output(command, timeout=3)
+else:
+    sys.argv = ['bounded-relay', '--max-bytes', '1024', '--deadline', '3', '--'] + command
+    module.main()
+'''
+target = sys.argv[1]
+proc = subprocess.Popen([sys.executable, '-c', helper_code,
+    target, str(ready_w), str(go_r)],
+    pass_fds=(ready_w, go_r), start_new_session=True,
+    stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+os.close(ready_w)
+os.close(go_r)
+selector = selectors.DefaultSelector()
+selector.register(ready_r, selectors.EVENT_READ)
+child = None
+try:
+    if not selector.select(5):
+        raise RuntimeError('no pre-exec readiness message')
+    first = os.read(ready_r, 4096)
+    print(first.decode().strip())
+    child = int(first.split()[1])
+    proc.kill()
+    proc.wait(timeout=5)
+    os.write(go_w, b'x')
+    if not selector.select(5):
+        raise RuntimeError('no post-parent-death result')
+    result = os.read(ready_r, 4096)
+    print('OBSERVATION:', result.decode().strip() or 'child exited without executing')
+    os.waitpid(child, 0)
+    child = None
+finally:
+    if proc.poll() is None:
+        proc.kill()
+        proc.wait(timeout=5)
+    if child is not None:
+        try:
+            os.kill(child, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        os.waitpid(child, 0)
+    selector.close()
+    os.close(ready_r)
+    os.close(go_w)
+"""
+
 
 def load_helper():
     loader = importlib.machinery.SourceFileLoader("keybinds_json", str(SCRIPT))
@@ -692,9 +777,8 @@ class SharedSafetyTests(unittest.TestCase):
                 self.helper.command_output(["/usr/bin/true"])
 
     def test_pdeathsig_setup_failure_fails_the_spawn(self):
-        # Losing the death signal used to be a silent degradation; a child
-        # that cannot arm it must never exec, and the failure must surface in
-        # the fail-closed HelperError contract.
+        # Losing the death signal fails the spawn: the failure surfaces in
+        # the fail-closed HelperError contract and the command never runs.
         real_command = self.helper.trusted_command
 
         def deny_libc(path):
@@ -702,17 +786,65 @@ class SharedSafetyTests(unittest.TestCase):
                 raise self.helper.HelperError("untrusted libc")
             return real_command(path)
 
-        with mock.patch.object(self.helper, "trusted_command", side_effect=deny_libc):
-            with self.assertRaises(self.helper.HelperError):
-                self.helper.command_output(["/usr/bin/true"], timeout=5)
+        with tempfile.TemporaryDirectory() as directory:
+            sentinel = Path(directory) / "executed"
+            with mock.patch.object(self.helper, "trusted_command", side_effect=deny_libc):
+                with self.assertRaises(self.helper.HelperError):
+                    self.helper.command_output(
+                        [sys.executable, "-c",
+                         f"import pathlib; pathlib.Path({str(sentinel)!r}).touch()"],
+                        timeout=5,
+                    )
+            self.assertFalse(sentinel.exists())
 
     def test_a_failed_prctl_fails_the_spawn(self):
         fake_libc = mock.Mock()
         fake_libc.prctl.return_value = -1
-        with mock.patch.object(self.helper.ctypes, "CDLL", return_value=fake_libc), \
-                mock.patch.object(self.helper.ctypes, "get_errno", return_value=13):
-            with self.assertRaises(self.helper.HelperError):
-                self.helper.command_output(["/usr/bin/true"], timeout=5)
+        with tempfile.TemporaryDirectory() as directory:
+            sentinel = Path(directory) / "executed"
+            with mock.patch.object(self.helper.ctypes, "CDLL", return_value=fake_libc), \
+                    mock.patch.object(self.helper.ctypes, "get_errno", return_value=13):
+                with self.assertRaises(self.helper.HelperError):
+                    self.helper.command_output(
+                        [sys.executable, "-c",
+                         f"import pathlib; pathlib.Path({str(sentinel)!r}).touch()"],
+                        timeout=5,
+                    )
+            self.assertFalse(sentinel.exists())
+
+    def test_a_clean_exit_still_reaps_the_group(self):
+        # Success is not a reason to leave the child's own children behind.
+        with tempfile.TemporaryDirectory() as directory:
+            pid_file = Path(directory) / "grandchild.pid"
+            child_code = (
+                "import subprocess, sys; "
+                "grandchild = subprocess.Popen(['/usr/bin/sleep', '30'],"
+                " stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); "
+                f"open({str(pid_file)!r}, 'w').write(str(grandchild.pid)); "
+                "print('done')"
+            )
+            self.assertEqual(
+                self.helper.command_output([sys.executable, "-c", child_code], timeout=10),
+                "done\n",
+            )
+            self.assert_pid_dead(int(pid_file.read_text()))
+        self.assertIsNone(self.helper._ACTIVE_CHILD)
+
+    def test_parent_death_before_first_parent_read_blocks_exec(self):
+        # The R8 fork race, driven deterministically: a subreaper controller
+        # holds the child's first parent read behind a barrier, SIGKILLs the
+        # helper, and only then releases the read. The child must compare
+        # against the helper identity captured before the fork and exit
+        # before exec instead of running the command. The controller reaps
+        # every process it owns, on failure too.
+        result = subprocess.run(
+            [sys.executable, "-c", PARENT_DEATH_CONTROLLER, str(SCRIPT)],
+            capture_output=True, text=True, timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("FORKED", result.stdout)
+        self.assertNotIn("EXECUTED_AFTER_PARENT_DEATH", result.stdout)
+        self.assertIn("child exited without executing", result.stdout)
 
     def test_every_library_load_is_checked_not_just_absolute(self):
         # R7 covers dynamic libraries, and an absolute path only says where the
