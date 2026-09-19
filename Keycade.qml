@@ -91,9 +91,25 @@ Item {
   property bool languageMenuOpen: false
   property bool soundMenuOpen: false
   property bool excludedMenuOpen: false
-  // Every top-bar control is this wide. A run shows six of them at once,
-  // and the row is anchored to the right edge of a cabinet that stops at
-  // 1040: at the old assorted widths the sixth one ran under the brand.
+  property bool browseOpen: false
+  property bool browseTargetsOpen: false
+  property string browseTargetId: "all"
+  property string browseCategory: ""
+  property string browseSource: ""
+  property bool browseInDeck: false
+  property string browseWarning: ""
+  readonly property bool browseAvailable: store.ready && !root.groundLoading
+      && (root.view === "home" || root.view === "summary" || root.view === "mastery")
+  readonly property var browseTarget: Decks.find(root.deckDefinitions, root.browseTargetId)
+  readonly property var browseCategories: PackEligibility.categories(root.eligibleCorpus)
+  // Only active, validated pack metadata is offered, never arbitrary config strings.
+  readonly property var browseExtras: root.activeBrowseExtras()
+  readonly property var browseMatches: root.filteredBrowseCards()
+  property var browseRows: []
+  onBrowseMatchesChanged: root.syncBrowseRows()
+  onBrowseAvailableChanged: if (!root.browseAvailable) root.closeBrowse()
+  // The compact grid wraps on smaller frames and during play, leaving room
+  // for the bounded selected-deck badge rather than overlapping the brand.
   readonly property int topButtonWidth: 100
   property bool themeMenuOpen: false
   property var excludedRows: []
@@ -166,8 +182,8 @@ Item {
         ? String(payload.locale) : ""
     root.activeSegmentStartedAt = 0
     root.pendingExternalUrl = ""
-    root.languageMenuOpen = false
-    root.soundMenuOpen = false
+    root.closeTopMenus()
+    root.closeBrowse()
     root.themeName = Palettes.supported(store.settings.theme) ? String(store.settings.theme)
         : Palettes.supported(payload.theme) ? String(payload.theme) : Palettes.defaultName()
     var savedLocale = String(store.settings.locale || "en")
@@ -237,6 +253,7 @@ Item {
   }
 
   function requestSafeClose() {
+    root.closeBrowse()
     cardTimer.stop()
     sounds.stopCountdown()
     feedbackTimer.stop()
@@ -353,7 +370,7 @@ Item {
   }
 
   function selectDeck(id) {
-    if (root.view === "playing" || !store.ready || root.groundLoading
+    if (root.browseOpen || root.view === "playing" || !store.ready || root.groundLoading
         || !Decks.find(root.deckDefinitions, id)) return false
     root.deckId = id
     store.settings.activeDeck = id
@@ -364,6 +381,117 @@ Item {
     root.adoptRunState()
     if (root.view === "summary" || root.view === "mastery") root.view = "home"
     root.refreshProgressCounts()
+    return true
+  }
+
+  // Drawer state is deliberately separate from settings.activeDeck. Opening
+  // results returns home; opening a saved run does not pause, allocate or resume.
+  function closeTopMenus() {
+    root.languageMenuOpen = false
+    root.soundMenuOpen = false
+    root.excludedMenuOpen = false
+    root.themeMenuOpen = false
+  }
+
+  function closeBrowse() {
+    root.browseTargetsOpen = false
+    root.browseOpen = false
+  }
+
+  function toggleBrowse() {
+    if (root.browseOpen) { root.closeBrowse(); return }
+    if (!root.browseAvailable) return
+    root.closeTopMenus()
+    if (root.view === "summary" || root.view === "mastery") root.view = "home"
+    root.browseTargetId = root.deckId
+    root.browseWarning = ""
+    root.browseOpen = true
+  }
+
+  function chooseBrowseTarget(id) {
+    if (!root.browseOpen || !root.browseAvailable || !Decks.find(root.deckDefinitions, id)) return
+    root.browseTargetId = id
+    root.browseTargetsOpen = false
+    root.browseWarning = ""
+  }
+
+  function browseCard(id) {
+    for (var i = 0; i < root.eligibleCorpus.length; i++)
+      if (root.eligibleCorpus[i].id === id) return root.eligibleCorpus[i]
+    return null
+  }
+
+  function activeBrowseExtras() {
+    var seen = Object.create(null)
+    var extras = []
+    root.eligibleCorpus.forEach(function(card) {
+      (card.extras || []).forEach(function(extra) {
+        if (packs.enabledExtras.indexOf(extra) !== -1 && !seen[extra]) {
+          seen[extra] = true
+          extras.push(extra)
+        }
+      })
+    })
+    return extras.sort()
+  }
+
+  function filteredBrowseCards() {
+    // All inputs already passed the bounded source/config consumers. Membership
+    // is still evaluated by the one engine; exclusions cannot re-enter here.
+    return root.eligibleCorpus.filter(function(card) {
+      if (root.browseCategory && card.category !== root.browseCategory) return false
+      if (root.browseSource === "custom"
+          && card.customKind !== "added" && card.customKind !== "changed") return false
+      if (root.browseSource && root.browseSource !== "custom"
+          && (root.browseExtras.indexOf(root.browseSource) === -1
+              || card.extras.indexOf(root.browseSource) === -1)) return false
+      return !root.browseInDeck || root.deckMembership(root.browseTargetId, card.id).member
+    }).map(function(card) { return card.id })
+  }
+
+  function syncBrowseRows() {
+    var next = root.browseMatches
+    // A membership change must not reset a long corpus ListView. Its model is
+    // IDs only; delegates resolve current metadata/membership independently.
+    if (next.length === root.browseRows.length && next.every(function(id, index) {
+      return id === root.browseRows[index]
+    })) return
+    root.browseRows = next
+  }
+
+  function browseMembershipLabel(membership) {
+    return !membership.member ? "ADD"
+        : membership.added ? "IN DECK (ADDED)" : "IN DECK (SEEDED)"
+  }
+
+  function toggleBrowseCard(cardId) {
+    if (!root.browseOpen || !root.browseAvailable) return false
+    if (!root.browseTarget) { root.browseWarning = "DECK UNAVAILABLE — CHOOSE ANOTHER TARGET"; return false }
+    if (root.browseTargetId === "all") return false
+    if (!root.browseCard(cardId)) return false
+    var membership = root.deckMembership(root.browseTargetId, cardId)
+    // Restore a pruned seed by clearing its override, not by layering an
+    // addition over a removal. Added/nonseed and seeded states have one action.
+    var action = membership.member ? (membership.added ? "reset" : "remove")
+        : membership.seeded ? "reset" : "add"
+    if (!root.setDeckCard(root.browseTargetId, cardId, action)) {
+      root.browseWarning = "DECK CHANGE NOT SAVED — CURATION LIMIT REACHED; REMOVE A CHOICE AND TRY AGAIN"
+      return false
+    }
+    root.browseWarning = ""
+    return true
+  }
+
+  // Called before home Enter and by the real Keys handler. Input bookkeeping
+  // remains outside this modal gate, including every modifier release.
+  function handleBrowseKey(event) {
+    if (!root.browseOpen) return false
+    if (event.key === Qt.Key_Escape) {
+      if (root.browseTargetsOpen) root.browseTargetsOpen = false
+      else root.closeBrowse()
+      root.escapeDown = false
+    }
+    event.accepted = true
     return true
   }
 
@@ -865,7 +993,7 @@ Item {
   }
 
   function resumeRun() {
-    if (!root.hasResumableSession() || !guard.active || root.groundLoading || root.view === "playing") return
+    if (root.browseOpen || !root.hasResumableSession() || !guard.active || root.groundLoading || root.view === "playing") return
     var session = store.session
     var offset = Math.max(0, Math.min(root.runCardLimit - 1, Number(session.offset || 0)))
     var restoredDeck = Session.restoreCards(session.cards, root.eligibleBindings)
@@ -912,11 +1040,13 @@ Item {
   }
 
   function startPrimary() {
+    if (root.browseOpen) return
     if (root.view === "home" && root.resumeAvailable) resumeRun()
     else startRun()
   }
 
   function startRun() {
+    if (root.browseOpen) return
     if (root.view !== "home" && root.view !== "summary") return
     // The home screen stays up while a cabinet loads, so START can be reached
     // before the table it would deal from has arrived.
@@ -1355,13 +1485,16 @@ Item {
 
     Item {
       id: keyCatcher
+      objectName: "keyCatcher"
       anchors.fill: parent
       focus: true
       Keys.priority: Keys.BeforeItem
 
-      Keys.onPressed: function(event) {
+      Keys.onPressed: function(event) { keyCatcher.handlePressed(event) }
+      function handlePressed(event) {
         guard.updateInput(Normalizer.modifierMask(event.modifiers))
         if (event.isAutoRepeat) { event.accepted = true; return }
+        if (root.handleBrowseKey(event)) return
         // Whether this Escape is a bare safe-exit or part of a modifier chord
         // (e.g. Super + Esc) is decided on release, not here: on a fast chord
         // Wayland can deliver the "modifiers" update for a just-pressed Super
@@ -1369,9 +1502,8 @@ Item {
         // under-reports it at press time. The release event has consistently
         // shown the correct modifiers by the time it arrives.
         if (event.key === Qt.Key_Escape) {
-          if (root.languageMenuOpen || root.soundMenuOpen) {
-            root.languageMenuOpen = false
-            root.soundMenuOpen = false
+          if (root.languageMenuOpen || root.soundMenuOpen || root.excludedMenuOpen || root.themeMenuOpen) {
+            root.closeTopMenus()
             root.escapeDown = false
             event.accepted = true
             return
@@ -1407,7 +1539,8 @@ Item {
         }
       }
 
-      Keys.onReleased: function(event) {
+      Keys.onReleased: function(event) { keyCatcher.handleReleased(event) }
+      function handleReleased(event) {
         guard.updateInput(Normalizer.modifierMask(event.modifiers))
         if (event.key === Qt.Key_Escape && root.escapeDown) {
           root.escapeDown = false
@@ -1472,13 +1605,17 @@ Item {
         }
 
         Column {
+          objectName: "topBrand"
           anchors.left: parent.left; anchors.leftMargin: 92
           anchors.verticalCenter: parent.verticalCenter
+          width: Math.max(0, topControls.x - x - 12)
           spacing: 2
-          SafeText { text: "KEYCADE"; color: root.voidColor; font.family: "monospace"; font.pixelSize: 32; font.bold: true; font.letterSpacing: 4 }
+          SafeText { width: parent.width; elide: Text.ElideRight; text: "KEYCADE"; color: root.voidColor; font.family: "monospace"; font.pixelSize: 32; font.bold: true; font.letterSpacing: 4 }
           Row {
+            width: parent.width
             spacing: 8
             SafeText {
+              visible: topbar.width >= 1000 && root.view !== "playing"
               anchors.verticalCenter: parent.verticalCenter
               text: i18n.t("brandSubtitle"); color: root.voidColor
               font.family: "monospace"; font.pixelSize: 11; font.bold: true
@@ -1490,13 +1627,13 @@ Item {
               anchors.verticalCenter: parent.verticalCenter
               // Bounded: a user-declared deck name can be 48 codepoints, and
               // it must never run under the top-bar controls.
-              width: Math.min(148, groundBadge.implicitWidth + 16); height: 18
+              width: Math.min(parent.width, 148, groundBadge.implicitWidth + 16); height: 18
               color: root.voidColor
               SafeText {
                 id: groundBadge
                 objectName: "groundBadge"
                 anchors.centerIn: parent
-                width: Math.min(implicitWidth, 132)
+                width: Math.max(0, Math.min(implicitWidth, parent.width - 16))
                 horizontalAlignment: Text.AlignHCenter
                 elide: Text.ElideRight; maximumLineCount: 1
                 text: root.headerDeckName() || i18n.t("profile_" + root.profileId)
@@ -1507,14 +1644,32 @@ Item {
           }
         }
 
-        Row {
+        Grid {
           id: topControls
+          objectName: "topControls"
           anchors.right: parent.right; anchors.rightMargin: 22
           anchors.verticalCenter: parent.verticalCenter
-          // One width for every control, and a gap narrow enough that all six
-          // - which is what a run shows - still clear the brand block on the
-          // left. Each label elides inside it rather than widening its button.
+          columns: root.view === "playing" ? 4 : topbar.width < 930 ? 3 : 5
           spacing: 8
+
+          Rectangle {
+            objectName: "browseButton"
+            width: root.topButtonWidth; height: 36
+            opacity: root.browseAvailable ? 1 : 0.4
+            color: root.browseOpen ? root.voidColor : root.screenColor
+            border.width: 3; border.color: root.voidColor
+            SafeText {
+              anchors.centerIn: parent; width: parent.width - 12
+              horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight
+              text: "BROWSE"; color: root.browseOpen ? root.primaryColor : root.inkColor
+              font.family: "monospace"; font.bold: true; font.pixelSize: 10
+            }
+            MouseArea {
+              objectName: "browseButtonArea"
+              anchors.fill: parent; enabled: root.browseAvailable
+              onClicked: root.toggleBrowse()
+            }
+          }
 
           Rectangle {
             id: leaveButton
@@ -1553,8 +1708,10 @@ Item {
               color: root.inkColor; font.family: "monospace"; font.bold: true; font.pixelSize: 10
             }
             MouseArea {
+              objectName: "excludedButtonArea"
               anchors.fill: parent
               onClicked: {
+                root.closeBrowse()
                 root.excludedMenuOpen = !root.excludedMenuOpen
                 root.soundMenuOpen = false
                 root.languageMenuOpen = false
@@ -1575,8 +1732,10 @@ Item {
               font.family: "monospace"; font.bold: true; font.pixelSize: 10
             }
             MouseArea {
+              objectName: "soundButtonArea"
               anchors.fill: parent
               onClicked: {
+                root.closeBrowse()
                 root.soundMenuOpen = !root.soundMenuOpen
                 root.languageMenuOpen = false
                 root.excludedMenuOpen = false
@@ -1594,8 +1753,10 @@ Item {
               color: root.inkColor; font.family: "monospace"; font.bold: true; font.pixelSize: 10
             }
             MouseArea {
+              objectName: "languageButtonArea"
               anchors.fill: parent
               onClicked: {
+                root.closeBrowse()
                 root.languageMenuOpen = !root.languageMenuOpen
                 root.soundMenuOpen = false
                 root.excludedMenuOpen = false
@@ -1613,12 +1774,249 @@ Item {
               color: root.inkColor; font.family: "monospace"; font.bold: true; font.pixelSize: 10
             }
             MouseArea {
+              objectName: "themeButtonArea"
               anchors.fill: parent
               onClicked: {
+                root.closeBrowse()
                 root.themeMenuOpen = !root.themeMenuOpen
                 root.soundMenuOpen = false
                 root.languageMenuOpen = false
                 root.excludedMenuOpen = false
+              }
+            }
+          }
+        }
+      }
+
+      // A modal curation surface inside the cabinet, never a second focus
+      // owner. Only corpus/target lists scroll; the close control stays visible.
+      Rectangle {
+        id: browseDrawer
+        objectName: "browseDrawer"
+        anchors.left: parent.left; anchors.right: parent.right
+        anchors.top: topbar.bottom; anchors.bottom: statusStrip.top
+        anchors.leftMargin: 22; anchors.rightMargin: 22
+        anchors.topMargin: 10; anchors.bottomMargin: 10
+        visible: root.browseOpen
+        z: 100
+        color: root.cabinetColor; border.width: 3; border.color: root.primaryColor
+        clip: true
+        MouseArea {
+          objectName: "browseBackdrop"
+          anchors.fill: parent
+          onWheel: function(wheel) { wheel.accepted = true }
+        }
+
+        Row {
+          id: browseHeader
+          anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+          anchors.margins: 12
+          height: 34; spacing: 8
+          Rectangle {
+            width: parent.width - 88; height: parent.height
+            color: root.screenColor; border.width: 2; border.color: root.primaryColor
+            SafeText {
+              objectName: "browseTargetName"
+              anchors.fill: parent; anchors.margins: 8
+              verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+              text: "TARGET: " + (root.deckDisplayName(root.browseTarget) || "UNAVAILABLE") + " ▾"
+              color: root.inkColor; font.family: "monospace"; font.pixelSize: 12; font.bold: true
+            }
+            MouseArea {
+              objectName: "browseTargetArea"
+              anchors.fill: parent
+              onClicked: root.browseTargetsOpen = !root.browseTargetsOpen
+            }
+          }
+          BrowseChip {
+            objectName: "browseClose"
+            width: 80; height: parent.height; label: "CLOSE"
+            onPicked: root.closeBrowse()
+          }
+        }
+
+        Column {
+          id: browseFilters
+          anchors.left: parent.left; anchors.right: parent.right; anchors.top: browseHeader.bottom
+          anchors.leftMargin: 12; anchors.rightMargin: 12; anchors.topMargin: 8
+          spacing: 6
+          enabled: !root.browseTargetsOpen
+          ListView {
+            id: browseCategoryList
+            objectName: "browseCategories"
+            width: parent.width; height: 28; orientation: ListView.Horizontal
+            spacing: 6; clip: true; boundsBehavior: Flickable.StopAtBounds
+            model: [""].concat(root.browseCategories)
+            delegate: BrowseChip {
+              required property string modelData
+              objectName: "browseCategory:" + modelData
+              label: modelData ? i18n.t("category_" + modelData) : "ALL CATEGORIES"
+              selected: root.browseCategory === modelData
+              onPicked: root.browseCategory = modelData
+            }
+          }
+          ListView {
+            id: browseSourceList
+            objectName: "browseSources"
+            width: parent.width; height: 28; orientation: ListView.Horizontal
+            spacing: 6; clip: true; boundsBehavior: Flickable.StopAtBounds
+            model: ["", "custom"].concat(root.browseExtras)
+            delegate: BrowseChip {
+              required property string modelData
+              objectName: "browseSource:" + modelData
+              label: modelData === "custom" ? "CUSTOM (KEYMAPS.LUA)"
+                  : modelData ? modelData.split(".").pop() : "ALL SOURCES"
+              selected: root.browseSource === modelData
+              onPicked: root.browseSource = modelData
+            }
+          }
+          Row {
+            width: parent.width; height: 28; spacing: 6
+            BrowseChip {
+              objectName: "browseAllCards"
+              label: "ALL CARDS"; selected: !root.browseInDeck
+              onPicked: root.browseInDeck = false
+            }
+            BrowseChip {
+              objectName: "browseInDeck"
+              label: "IN DECK"; selected: root.browseInDeck
+              onPicked: root.browseInDeck = true
+            }
+            SafeText {
+              objectName: "browseCount"
+              width: Math.max(0, parent.width - x); height: parent.height
+              verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight
+              text: root.browseRows.length + " CARDS · "
+                  + (root.deckProgress[root.browseTargetId] ? root.deckProgress[root.browseTargetId].total : 0)
+                  + " IN TARGET"
+              color: root.mutedColor; font.family: "monospace"; font.pixelSize: 10
+            }
+          }
+        }
+
+        ListView {
+          id: browseList
+          objectName: "browseList"
+          anchors.left: parent.left; anchors.right: parent.right
+          anchors.top: browseFilters.bottom; anchors.bottom: browseNotice.top
+          anchors.leftMargin: 12; anchors.rightMargin: 12; anchors.topMargin: 8; anchors.bottomMargin: 6
+          model: root.browseRows
+          enabled: !root.browseTargetsOpen
+          clip: true; spacing: 4; boundsBehavior: Flickable.StopAtBounds
+          delegate: Rectangle {
+            id: browseRow
+            required property string modelData
+            objectName: "browseRow:" + modelData
+            readonly property var binding: root.browseCard(modelData)
+            readonly property var membership: root.deckMembership(root.browseTargetId, modelData)
+            width: browseList.width; height: 78
+            color: root.screenColor
+            Column {
+              anchors.left: parent.left; anchors.top: parent.top
+              anchors.leftMargin: 8; anchors.topMargin: 7
+              width: Math.max(0, parent.width - browseAction.width - 24); spacing: 4
+              SafeText {
+                objectName: "browsePrompt"
+                width: parent.width; elide: Text.ElideRight; maximumLineCount: 1
+                text: root.actionName(browseRow.binding)
+                color: root.inkColor; font.family: "monospace"; font.pixelSize: 12; font.bold: true
+              }
+              SafeText {
+                objectName: "browseNotation"
+                width: parent.width; elide: Text.ElideRight; maximumLineCount: 1
+                text: browseRow.binding ? browseRow.binding.notation : ""
+                color: root.coinColor; font.family: "monospace"; font.pixelSize: 11
+              }
+              SafeText {
+                objectName: "browseBadges"
+                width: parent.width; elide: Text.ElideRight; maximumLineCount: 1
+                text: (browseRow.binding ? i18n.t("context_" + browseRow.binding.answer.context) : "")
+                    + " · " + root.otherDecks(browseRow.modelData, root.browseTargetId).slice(0, 33)
+                        .map(function(definition) { return root.deckDisplayName(definition) }).join(" · ")
+                color: root.mutedColor; font.family: "monospace"; font.pixelSize: 10
+              }
+            }
+            Rectangle {
+              id: browseAction
+              width: 150; height: 34
+              anchors.right: parent.right; anchors.rightMargin: 8; anchors.verticalCenter: parent.verticalCenter
+              color: root.voidColor; border.width: 2
+              border.color: browseRow.membership.member ? root.successColor : root.mutedColor
+              opacity: root.browseTarget && root.browseTargetId !== "all" ? 1 : 0.4
+              SafeText {
+                objectName: "browseMembership"
+                anchors.fill: parent; anchors.margins: 6
+                verticalAlignment: Text.AlignVCenter; horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight; maximumLineCount: 1
+                text: root.browseMembershipLabel(browseRow.membership)
+                color: browseRow.membership.member ? root.successColor : root.inkColor
+                font.family: "monospace"; font.pixelSize: 10; font.bold: true
+              }
+              MouseArea {
+                objectName: "browseMembershipArea"
+                anchors.fill: parent
+                enabled: root.browseAvailable && root.browseTarget !== null && root.browseTargetId !== "all"
+                onClicked: root.toggleBrowseCard(browseRow.modelData)
+              }
+            }
+          }
+        }
+        SafeText {
+          anchors.centerIn: browseList
+          width: browseList.width; horizontalAlignment: Text.AlignHCenter
+          visible: !root.browseRows.length
+          text: "NO MATCHING CARDS"
+          color: root.mutedColor; font.family: "monospace"; font.pixelSize: 12
+          elide: Text.ElideRight
+        }
+        SafeText {
+          id: browseNotice
+          objectName: "browseNotice"
+          anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+          anchors.margins: 12
+          height: 30
+          text: root.browseWarning || (!root.browseTarget ? "DECK UNAVAILABLE — CHOOSE ANOTHER TARGET"
+              : root.browseTargetId === "all" ? "ALL IS READ-ONLY — CHOOSE AN EDITABLE TARGET DECK"
+              : root.deckConfigNote())
+          color: root.coinColor; font.family: "monospace"; font.pixelSize: 10
+          wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
+        }
+
+        // The selector stays bounded even with all 33 definitions. Its blanket
+        // dismisses only this menu, never activates a row underneath it.
+        Item {
+          anchors.fill: parent; anchors.topMargin: 52
+          visible: root.browseTargetsOpen; z: 2
+          MouseArea { anchors.fill: parent; onClicked: root.browseTargetsOpen = false }
+          Rectangle {
+            anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+            anchors.margins: 12
+            height: Math.min(parent.height - 24, 230)
+            color: root.voidColor; border.width: 2; border.color: root.primaryColor
+            ListView {
+              id: browseTargets
+              objectName: "browseTargets"
+              anchors.fill: parent; anchors.margins: 4
+              clip: true; boundsBehavior: Flickable.StopAtBounds
+              model: root.deckDefinitions.slice(0, 33)
+              delegate: Rectangle {
+                id: targetRow
+                required property var modelData
+                objectName: "browseTarget:" + modelData.id
+                width: browseTargets.width; height: 30
+                color: modelData.id === root.browseTargetId ? root.screenColor : root.voidColor
+                SafeText {
+                  objectName: "browseTargetLabel"
+                  anchors.fill: parent; anchors.margins: 6
+                  verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight; maximumLineCount: 1
+                  text: root.deckDisplayName(targetRow.modelData)
+                  color: root.inkColor; font.family: "monospace"; font.pixelSize: 12
+                }
+                MouseArea {
+                  objectName: "browseTargetPick"
+                  anchors.fill: parent
+                  onClicked: root.chooseBrowseTarget(targetRow.modelData.id)
+                }
               }
             }
           }
@@ -2038,6 +2436,24 @@ Item {
     }
   }
 
+  component BrowseChip: Rectangle {
+    id: chip
+    property string label: ""
+    property bool selected: false
+    signal picked()
+    width: Math.min(190, chipLabel.implicitWidth + 20); height: 28
+    color: selected ? root.primaryColor : root.screenColor
+    border.width: 1; border.color: root.mutedColor
+    SafeText {
+      id: chipLabel
+      anchors.centerIn: parent; width: parent.width - 12
+      text: chip.label; elide: Text.ElideRight; maximumLineCount: 1
+      color: chip.selected ? root.voidColor : root.inkColor
+      font.family: "monospace"; font.pixelSize: 10; font.bold: true
+    }
+    MouseArea { objectName: "browseChipArea"; anchors.fill: parent; onClicked: chip.picked() }
+  }
+
   Component {
     id: homeCard
     Item {
@@ -2168,13 +2584,13 @@ Item {
         }
         // Zero-card decks stay listed and selectable for later curation, but
         // there is nothing to deal: the controls refuse and this hint names
-        // where adding cards will live.
+        // the usable top-bar control for adding cards.
         SafeText {
           objectName: "emptyDeckHint"
           width: parent.width; horizontalAlignment: Text.AlignHCenter
           visible: root.view === "home" && !root.groundLoading && !root.trainingLockedOut
                    && root.startRefusal === "empty-deck"
-          text: "EMPTY DECK — ADD CARDS WITH THE BROWSE DRAWER (COMING SOON)"
+          text: "EMPTY DECK — USE BROWSE ABOVE TO ADD CARDS"
           color: root.coinColor; font.pixelSize: 12; font.bold: true
           wrapMode: Text.WordWrap; maximumLineCount: 2; elide: Text.ElideRight
         }
@@ -2205,7 +2621,7 @@ Item {
             MouseArea {
               objectName: "startButtonArea"
               anchors.fill: parent
-              enabled: !root.groundLoading && !root.startBlocked
+              enabled: !root.browseOpen && !root.groundLoading && !root.startBlocked
               onClicked: root.startPrimary()
             }
           }
@@ -2218,7 +2634,7 @@ Item {
             MouseArea {
               objectName: "startFreshArea"
               anchors.fill: parent
-              enabled: !root.groundLoading && !root.startBlocked
+              enabled: !root.browseOpen && !root.groundLoading && !root.startBlocked
               onClicked: root.startRun()
             }
           }

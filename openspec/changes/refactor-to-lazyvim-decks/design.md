@@ -89,7 +89,7 @@ A card declared in `keymaps.lua` enters the corpus as `unseen`. The scheduler de
 
 The `EXCLUDED` panel is the precedent: a top-bar toggle opening a scrollable list with a per-row action. The deck panel is that over the corpus rather than over the exclusions.
 
-Deck assignment happens in this drawer only; the per-card gesture during a run keeps its existing exclusion meaning (D12).
+Deck assignment happens in this drawer only; the per-card gesture during a run keeps its existing exclusion meaning (D12). Browse-and-Pick is available on home/resume and result screens, but disabled during active play. Opening it from a result screen returns home before curation. No new pause/resume transition is introduced; an interrupted saved session still follows the approved resume/shrink rules when membership changes.
 
 Because the overlay holds exclusive keyboard focus with no text input, the browse-and-pick surface operates via **Deck-Focused Curation** and **filter chips**:
 - **Target deck selector at top**: The user selects which deck they are currently curating (e.g. `Nemesis`, `LSP`).

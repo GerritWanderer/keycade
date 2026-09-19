@@ -288,3 +288,28 @@ M1/M2 are closed, and the side lane is removed before WP4 as planned.
   DECKS, empty-deck Browse hint, invalid-config and rejected-count notices.
   WP7b must remove COMING SOON when the drawer exists; WP8 removes the unused
   groundLabel key. HUD /24 is deliberately left for WP7c. Task 5.1 complete.
+
+## WP7b — Browse-and-Pick drawer — PASS
+
+- User chose (and approved recording in D6) curation outside active play:
+  home/resume and results are supported; opening from results returns home;
+  active play disables Browse without adding a pause transition.
+- Independent target selection, category/custom/active-extra/membership chips,
+  virtualized corpus rows, other-deck badges and contextual add/reset/prune/
+  restore actions use the existing engine and atomic state API. All is read-only.
+- Capacity refusal is visible/nonfatal and preserves both memory and persisted
+  bytes. Missing targets fail closed; exclusions remain global and the run
+  gesture is unchanged. Modal key/click-through protection, coordinated menus,
+  stable scrolling and responsive bounds cover 33 targets and small windows.
+- Eight actual-component drawer tests were added; all five earlier home tests
+  remain. Orchestrator gate: **185 Python**, all QML suites (73/21/56/7/22),
+  fuzz 1000, lint exit 0, strict validation, whitespace checks and four Wayland
+  integrations PASS. Render review covered 760×600 and 1280×800 layouts.
+- Challenger **PASS**, no findings. Logs: `wp7b/`; temporary render evidence:
+  `/tmp/keycade-wp7b-renders/drawer-760x600.png` and
+  `drawer-membership-1280x800.png`.
+- Static English copy is now frozen for WP8: Browse/Close/Target/Unavailable;
+  category/custom/source/membership filters; Added/Seeded/Add labels; card and
+  target counts; no-match, read-only-all, missing-target, capacity and empty-deck
+  notices. COMING SOON was removed. Task 5.2 complete; HUD and final localization
+  remain separate packages.

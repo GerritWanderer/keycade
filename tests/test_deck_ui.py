@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PACK = json.loads((ROOT / "assets/packs/lazyvim.json").read_text())
 IDS = ["lazyvim/" + card["localId"] for card in PACK["bindings"] if not card["extras"]][:8]
 RENDER_DIR = Path("/tmp/keycade-wp7a-renders")
-EMPTY_HINT = "EMPTY DECK — ADD CARDS WITH THE BROWSE DRAWER (COMING SOON)"
+EMPTY_HINT = "EMPTY DECK — USE BROWSE ABOVE TO ADD CARDS"
 LONG_NAME = "Deck" + "名" * 44  # exactly 48 codepoints, multilingual
 MARKUP_NAME = "<b>Nemesis</b> & <i>marks</i>"
 
@@ -31,13 +31,15 @@ Item {
   property bool wantsFocus: false
   property bool active: true
   property int plays: 0
+  property int lastMask: 0
+  property int inputUpdates: 0
   signal ready()
   signal blocked(string message)
   signal closed()
   function begin() { ready() }
   function pause() {}
   function play() { plays++ }
-  function updateInput(mask) {}
+  function updateInput(mask) { lastMask = mask; inputUpdates++ }
   function requestClose() { closed() }
   function fail(message) { blocked(message) }
 }
@@ -63,7 +65,11 @@ Scope {
   id: test
   property bool exercised: false
   property int phase: 0
+  property int step: 0
+  property var data: ({})
   property var report: null
+  function later() { test.exercised = false }
+  __HELPERS__
   property string renderTo: __RENDER_TO__
 
   function check(value, message) { if (!value) throw new Error(message) }
@@ -116,8 +122,8 @@ Scope {
   Window {
     id: win
     visible: true
-    width: 1280
-    height: 800
+    width: __WIDTH__
+    height: __HEIGHT__
     color: "#05070e"
     App.Keycade { id: overlay; anchors.fill: parent }
   }
@@ -134,7 +140,7 @@ Scope {
       if (test.phase === 2) { test.phase = 3; return } // settle locale/layout
       test.exercised = true
       try {
-        test.check(overlay.view === "home", "home view")
+        if (test.step === 0) test.check(overlay.view === "home", "home view")
         __BODY__
         test.finish({})
       } catch (error) { test.report = { failure: String(error) } }
@@ -162,7 +168,7 @@ Scope {
 '''
 
 
-class DeckHomeUiTests(unittest.TestCase):
+class DeckUiHarness(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -195,7 +201,7 @@ class DeckHomeUiTests(unittest.TestCase):
         config.mkdir(parents=True, exist_ok=True)
         (config / "decks.json").write_text(text)
 
-    def launch(self, body, render_to="", locale="en"):
+    def launch(self, body, render_to="", locale="en", helpers="", size=(1280, 800)):
         # Same isolation as the deck-session integration: test-only aliases,
         # no native window and no compositor connection. Here the panel stays
         # a sized, visible Item inside an offscreen window so the real home
@@ -215,7 +221,10 @@ class DeckHomeUiTests(unittest.TestCase):
         shell = self.home / "shell.qml"
         shell.write_text(SHELL.replace("__BODY__", body)
                               .replace("__RENDER_TO__", json.dumps(render_to))
-                              .replace("__LOCALE__", json.dumps(locale)))
+                              .replace("__LOCALE__", json.dumps(locale))
+                              .replace("__HELPERS__", helpers)
+                              .replace("__WIDTH__", str(size[0]))
+                              .replace("__HEIGHT__", str(size[1])))
         completed = subprocess.run(["/usr/bin/quickshell", "--no-color", "--path", str(shell)],
                                    env=self.env, capture_output=True, text=True, timeout=30)
         output = completed.stdout + completed.stderr
@@ -233,6 +242,8 @@ class DeckHomeUiTests(unittest.TestCase):
                 "recentFirstTry": [True, True], "reactions": [300, 320],
                 "successfulRuns": [38, 39], "lastSuccessfulRun": 39, "lastSeenAt": 1, "lapseCount": 0}
 
+
+class DeckHomeUiTests(DeckUiHarness):
     def test_starters_order_localized_names_and_live_start(self):
         # No decks.json: the shipped starters plus the reserved all deck.
         self.write_state("settings", {"schemaVersion": 4, "activeDeck": "all", "locale": "zh-CN",
@@ -317,7 +328,7 @@ class DeckHomeUiTests(unittest.TestCase):
           test.check(overlay.startRefusal === "empty-deck" && overlay.startBlocked, "refusal armed")
           var hint = test.byName(overlay, "emptyDeckHint")
           test.check(hint.visible === true, "empty hint visible")
-          test.check(hint.text === "EMPTY DECK — ADD CARDS WITH THE BROWSE DRAWER (COMING SOON)", "hint copy")
+          test.check(hint.text === "EMPTY DECK — USE BROWSE ABOVE TO ADD CARDS", "hint copy")
           var note = test.byName(overlay, "deckConfigNote")
           test.check(note.visible === true && note.text === "DECKS CONFIG: 2 REJECTED", "rejected count note")
           var start = test.byName(overlay, "startButtonArea")
