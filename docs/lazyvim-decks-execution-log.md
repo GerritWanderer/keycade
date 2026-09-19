@@ -187,3 +187,10 @@ runnable consumers were gone. Orchestrator full gate PASS (146 Python / 73 core
 QML / 56 reader / 7 guard, fuzz 1000, lint, strict validation); Challenger delta
 PASS with no findings. Its mention in the text-key fixture header is historical
 rationale, not a runnable dependency. Task 1.7 is complete.
+
+The owning WP1e worker removed the final 46 Herdr descriptions per language and
+regenerated Locales after helper removal was visible. The same complete gate
+passed independently; Challenger delta PASS, no findings. Catalogs now have 448
+keys each with all live LazyVim and generic strings preserved. After conflict-free
+integration the complete gate passed again (`m2-complete/`). Task 1.6 is complete;
+M1/M2 are closed, and the side lane is removed before WP4 as planned.
