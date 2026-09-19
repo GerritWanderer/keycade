@@ -179,3 +179,11 @@ visible on that lane. Tasks 1.6 and 1.7 remain unchecked until those follow-ups.
   commit. Integrated gate: 146 Python / 73 core QML / 56 reader QML / 7 guard QML,
   fuzz 1000, lint, strict validation and four Wayland integrations PASS. Logs:
   `/tmp/keycade-lazyvim-decks-gates/teardown-merge/`.
+
+### Coordinated final cleanup
+
+The owning WP1b worker removed `tests/fixtures/canonical-keys.js` only after both
+runnable consumers were gone. Orchestrator full gate PASS (146 Python / 73 core
+QML / 56 reader / 7 guard, fuzz 1000, lint, strict validation); Challenger delta
+PASS with no findings. Its mention in the text-key fixture header is historical
+rationale, not a runnable dependency. Task 1.7 is complete.

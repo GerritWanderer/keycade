@@ -6,7 +6,7 @@
 - [x] 1.4 Remove `neovim.json`, `tmux.json`, and `vim.json` from `assets/packs/` and remove the vim, neovim and tmux collectors from `tools/build_packs.py`, verifying `python3 tools/build_packs.py` succeeds with only the LazyVim path
 - [x] 1.5 Prune `lib/Profiles.js` to retain only `lazyvim` profile definition and remove keysym judging paths from `lib/AnswerMatcher.js` and `lib/InputNormalizer.js`, verifying sequence text judging continues to pass tests
 - [ ] 1.6 Remove `libxkbcommon` references from `AGENTS.md` and `CLAUDE.md`, and prune unused locale strings from `lib/Locales.js`
-- [ ] 1.7 Delete obsolete tests and fixtures — `test_herdr_keys.py`, `test_tmux_keys.py`, the tmux slice of `test_app_config.py`, the non-guard-status cases of `test_keybinds_json.py`, `hyprland_source_smoke.qml`, `test_hyprland_source_qml.sh`, and fixtures `binds.txt`, `devices.txt`, `herdr-keys.txt`, `canonical-keys.js` — verifying `python3 -m unittest discover -s tests -p "test_*.py"` still passes
+- [x] 1.7 Delete obsolete tests and fixtures — `test_herdr_keys.py`, `test_tmux_keys.py`, the tmux slice of `test_app_config.py`, the non-guard-status cases of `test_keybinds_json.py`, `hyprland_source_smoke.qml`, `test_hyprland_source_qml.sh`, and fixtures `binds.txt`, `devices.txt`, `herdr-keys.txt`, `canonical-keys.js` — verifying `python3 -m unittest discover -s tests -p "test_*.py"` still passes
 - [ ] 1.8 Revise `README.md`, `README.zh-CN.md` and `manifest.json` framing (remove the Keyboard Layouts section, reposition Keycade as a LazyVim trainer running on Omarchy) and sync `.bestpractices.json`, verifying no stale references to removed grounds remain
 
 ## 2. Deck Configuration Reader and Hardening
