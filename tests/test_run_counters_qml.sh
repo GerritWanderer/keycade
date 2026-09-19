@@ -1,16 +1,9 @@
 #!/usr/bin/bash
 
-# Every number Keycade shows belongs to one training ground, and the ones a run
-# produces belong to one run inside it. Both kinds are drawn on the home screen
-# - the header row and the counters beside the deck are not hidden between runs
-# - which is where the defect showed: leaving a tmux run and picking another
-# cabinet left tmux's run number, targets, accuracy and "new learned" sitting
-# under that cabinet's name until the next run overwrote them.
-#
-# Nothing offscreen can see this. The tallies live on the overlay root, the
-# session and statistics that seed them are read from disk by a real store, and
-# the ground is picked through the same asynchronous path the user clicks. So
-# this drives the real component against the real compositor.
+# The single LazyVim supply must still adopt saved run counters on asynchronous
+# load, reset them for a fresh run, and save an interrupted run exactly. Retired
+# history is retained but contributes nothing to the displayed totals. Drive
+# the real store/source wiring without ever opening the exclusive overlay.
 
 set -euo pipefail
 
@@ -29,30 +22,30 @@ if [[ -z ${WAYLAND_DISPLAY:-} ]]; then
   exit 0
 fi
 
-mkdir -p -- "$test_root/config" "$test_root/state"
+mkdir -p -- "$test_root/config" "$test_root/state" "$test_root/home"
 cp -r -- "$repo_root" "$test_root/config/keycade"
 rm -rf -- "$test_root/config/keycade/.git"
 
-# A resumable tmux run, and progress that exists only under tmux: real card and
-# binding ids from the shipped table, so neither is discarded as stale.
-python3 - "$test_root/config/keycade" "$test_root" <<'PY'
+# Empty, isolated HOME means the core table: no local extras or overrides.
+expected=$(python3 - "$test_root/config/keycade" "$test_root" <<'PY'
 import json, sys
 from pathlib import Path
 root, out = Path(sys.argv[1]), Path(sys.argv[2])
-pack = json.loads((root / "assets/packs/tmux.json").read_text("utf-8"))
-ids = ["tmux/" + entry["localId"] for entry in pack["bindings"]]
+pack = json.loads((root / "assets/packs/lazyvim.json").read_text("utf-8"))
+ids = ["lazyvim/" + entry["localId"] for entry in pack["bindings"] if not entry["extras"]]
 
 (out / "session.json").write_text(json.dumps({
-    "schemaVersion": 1, "profileId": "tmux", "runId": 3, "offset": 5,
+    "schemaVersion": 1, "profileId": "lazyvim", "runId": 3, "offset": 5,
     "cards": [{"bindingId": binding, "tier": "learning", "queue": "weak",
                "remedial": False} for binding in ids[:6]],
     "correct": 5, "attempts": 7, "newLearned": 3, "masteredGained": 2,
     "runReviewTarget": 4, "runNewTarget": 6,
     "pendingReinforcements": ids[:2], "reactions": [900, 1200],
+    "correctionRequired": True,
 }) + "\n", "utf-8")
 
-# Stats promotes a learning entry that already meets the mastery rule, so the
-# two shapes have to differ in the evidence, not only in the state field.
+# Stats promotes learning entries with sufficient evidence, so these shapes
+# differ in the evidence rather than just in their state field.
 def mastered():
     return {"state": "mastered", "guidedCompleted": True,
             "dueAt": 4102444800000, "dueRun": 0, "intervalStep": 3,
@@ -68,33 +61,39 @@ def due():
             "successfulRuns": [2], "lastSuccessfulRun": 2,
             "lastSeenAt": 1, "lapseCount": 1}
 
-bindings = {}
-for binding in ids[:7]:
-    bindings[binding] = mastered()
-for binding in ids[7:11]:
-    bindings[binding] = due()
+bindings = {binding: mastered() for binding in ids[:7]}
+bindings.update({binding: due() for binding in ids[7:11]})
+bindings["tmux/prefix/x"] = mastered()
 (out / "stats.json").write_text(json.dumps({
     "schemaVersion": 4, "bindings": bindings,
-    "profiles": {"tmux": {"runs": 2, "totalTrainingMs": 60000,
-                          "firstMasteryAt": 0, "firstMasteryCelebrated": False}},
+    "profiles": {
+        "lazyvim": {"runs": 2, "totalTrainingMs": 60000},
+        "tmux": {"runs": 9, "coverageCursor": 5, "totalTrainingMs": 90000,
+                 "firstMasteryAt": 0, "firstMasteryRun": 0,
+                 "firstMasteryCelebrated": False, "knownTotal": 86, "knownMastered": 1},
+    },
 }) + "\n", "utf-8")
+(out / "settings.json").write_text(json.dumps({
+    "schemaVersion": 3, "activeProfile": "tmux", "locale": "en",
+    "feedbackSound": False, "countdownSound": False,
+}) + "\n", "utf-8")
+print(len(ids))
 PY
-
-for kind in session stats; do
+)
+for kind in session stats settings; do
   XDG_STATE_HOME="$test_root/state" "$repo_root/bin/state-store" write "$kind" \
     < "$test_root/$kind.json" > /dev/null
 done
-# Start somewhere else, so picking tmux is a real switch rather than a no-op.
-printf '%s\n' '{"schemaVersion":3,"locale":"en","activeProfile":"hyprland"}' \
-  | XDG_STATE_HOME="$test_root/state" "$repo_root/bin/state-store" write settings > /dev/null
 
-cat > "$test_root/config/shell.qml" <<'EOF'
+cat > "$test_root/config/shell.qml" <<EOF
 import QtQuick
 import Quickshell
 import "keycade" as Keycade
 
 ShellRoot {
   Keycade.Keycade { id: overlay }
+  readonly property int expectedTotal: $expected
+  property int phase: 0
   property int failures: 0
 
   function check(label, actual, expected) {
@@ -105,11 +104,10 @@ ShellRoot {
     }
   }
 
-  // tmux is the ground with a saved run and with progress, so the screen shows
-  // that run and that progress.
-  function checkTmux(round) {
+  function checkSaved(round, runId) {
     check(round + " resumeAvailable", overlay.resumeAvailable, true)
-    check(round + " runNumber", overlay.runNumber, 3)
+    check(round + " canResume", overlay.hasResumableSession(), true)
+    check(round + " runNumber", overlay.runNumber, runId)
     check(round + " progress", overlay.completedCardCount(), 5)
     check(round + " runReviewTarget", overlay.runReviewTarget, 4)
     check(round + " runNewTarget", overlay.runNewTarget, 6)
@@ -119,101 +117,142 @@ ShellRoot {
     check(round + " masteredGained", overlay.masteredGained, 2)
     check(round + " mastered", overlay.progressCounts.mastered, 7)
     check(round + " due", overlay.progressCounts.due, 4)
-    check(round + " total", overlay.progressCounts.total, 86)
-    check(round + " own cabinet", overlay.groundProgressLabel("tmux"), "7/86")
+    check(round + " total", overlay.progressCounts.total, expectedTotal)
+    check(round + " own cabinet", overlay.groundProgressLabel("lazyvim"), "7/" + expectedTotal)
+    check(round + " retired cabinet hidden", overlay.groundProgressLabel("tmux"), "—")
+    check(round + " only LazyVim", Object.keys(overlay.groundProgress).join(","), "lazyvim")
+    check(round + " exclusive overlay never opened", overlay.opened, false)
   }
 
   Timer {
-    interval: 2500; running: true; repeat: false
-    onTriggered: { overlay.selectProfile("tmux"); onTmux.start() }
-  }
-  Timer {
-    id: onTmux; interval: 4000; repeat: false
+    interval: 100; running: true; repeat: true
     onTriggered: {
-      checkTmux("tmux")
-      // What a run that was just played leaves behind on the root. Written
-      // here rather than played out, so the switch below is tested against
-      // numbers that certainly exist rather than ones that happen to be zero.
-      overlay.newLearned = 9
-      overlay.masteredGained = 8
-      overlay.correct = 20
-      overlay.attempts = 24
-      overlay.runNumber = 7
-      overlay.runReviewTarget = 11
-      overlay.runNewTarget = 13
-      overlay.runOffset = 17
-      overlay.selectProfile("vim")
-      onVim.start()
+      if (phase === 0) {
+        if (overlay.profileCounters().runs !== 2) return
+        check("retired selection ignored", overlay.profileId, "lazyvim")
+        overlay.view = "home"
+        overlay.loadActiveGround()
+        phase = 1
+        return
+      }
+      if (overlay.groundLoading) return
+      if (phase === 1) {
+        checkSaved("initial", 3)
+        // Deliberately stale run-local values must be replaced by the saved
+        // run on the next load, not leak into the home-screen header.
+        overlay.newLearned = 9
+        overlay.masteredGained = 8
+        overlay.correct = 20
+        overlay.attempts = 24
+        overlay.runNumber = 7
+        overlay.runReviewTarget = 11
+        overlay.runNewTarget = 13
+        overlay.runOffset = 17
+        overlay.loadActiveGround()
+        check("home survives refresh", overlay.view, "home")
+        check("loading announced", overlay.groundLoading, true)
+        check("cabinet keeps its number", overlay.groundProgressLabel("lazyvim"), "7/" + expectedTotal)
+        phase = 2
+      } else if (phase === 2) {
+        checkSaved("reloaded", 3)
+        // Finishing consumes the saved run and advances the reactive run id.
+        // Adopting home state afterwards must clear every run-local tally.
+        overlay.finishRun(false)
+        overlay.view = "home"
+        overlay.adoptRunState()
+        check("fresh resumeAvailable", overlay.resumeAvailable, false)
+        check("fresh canResume", overlay.hasResumableSession(), false)
+        check("fresh activeRunId", overlay.activeRunId, 4)
+        check("fresh runNumber", overlay.runNumber, 4)
+        check("fresh progress", overlay.completedCardCount(), 0)
+        check("fresh review target", overlay.runReviewTarget, 0)
+        check("fresh new target", overlay.runNewTarget, 0)
+        check("fresh reinforcements", overlay.pendingReinforcementCount(), 0)
+        check("fresh accuracy", overlay.accuracyPercent(), 0)
+        check("fresh newLearned", overlay.newLearned, 0)
+        check("fresh masteredGained", overlay.masteredGained, 0)
+        check("fresh reactions", overlay.reactions.length, 0)
+        check("fresh results", Object.keys(overlay.runResults).length, 0)
+        // Simulate an interrupted fourth run without activating InputGuard.
+        // leaveRun must retain the exact remaining cards, score and correction.
+        overlay.deck = overlay.eligibleBindings.slice(0, 6).map(function(binding) {
+          return { binding: binding, tier: "learning", queue: "weak", remedial: false }
+        })
+        overlay.runOffset = 5
+        overlay.correct = 5
+        overlay.attempts = 7
+        overlay.newLearned = 3
+        overlay.masteredGained = 2
+        overlay.runReviewTarget = 4
+        overlay.runNewTarget = 6
+        overlay.reactions = [900, 1200]
+        overlay.setReinforcementPending(overlay.deck[0].binding.id, true)
+        overlay.setReinforcementPending(overlay.deck[1].binding.id, true)
+        overlay.correctionRequired = true
+        overlay.activeSegmentStartedAt = Date.now() - 1000
+        overlay.view = "playing"
+        overlay.leaveRun()
+        check("leave returns home", overlay.view, "home")
+        check("study time recorded", overlay.profileCounters().totalTrainingMs >= 61000, true)
+        overlay.loadActiveGround()
+        phase = 3
+      } else {
+        checkSaved("interrupted", 4)
+        running = false
+        done.start()
+      }
     }
   }
-  // VIM has neither a saved run nor a single answered card. Not one of tmux's
-  // numbers may survive the switch, and the header has to read as the run that
-  // pressing START would begin - VIM's first, not tmux's fourth.
   Timer {
-    id: onVim; interval: 4000; repeat: false
+    id: done; interval: 1500; repeat: false
     onTriggered: {
-      check("vim resumeAvailable", overlay.resumeAvailable, false)
-      check("vim runNumber", overlay.runNumber, 1)
-      check("vim progress", overlay.completedCardCount(), 0)
-      check("vim runReviewTarget", overlay.runReviewTarget, 0)
-      check("vim runNewTarget", overlay.runNewTarget, 0)
-      check("vim reinforcements", overlay.pendingReinforcementCount(), 0)
-      check("vim accuracy", overlay.accuracyPercent(), 0)
-      check("vim newLearned", overlay.newLearned, 0)
-      check("vim masteredGained", overlay.masteredGained, 0)
-      check("vim mastered", overlay.progressCounts.mastered, 0)
-      check("vim due", overlay.progressCounts.due, 0)
-      check("vim total", overlay.progressCounts.total, 109)
-      // The cabinet row is the point of recording a ground's standing: the
-      // one you are not on still says where you left it, and one nobody has
-      // opened says nothing rather than a zero that reads as "none mastered".
-      check("vim cabinet", overlay.groundProgressLabel("vim"), "0/109")
-      check("tmux cabinet from vim", overlay.groundProgressLabel("tmux"), "7/86")
-      check("unopened cabinet", overlay.groundProgressLabel("neovim"), "—")
-      // Picking a cabinet from the home screen stays on the home screen. The
-      // row is drawn from what each ground recorded, so there is nothing to
-      // fetch before it can be shown, and the screen no longer goes away and
-      // comes back for the wait.
-      //
-      // Put on the home screen by hand: opening the overlay for real would
-      // take the keyboard away from whoever is running the suite, and what is
-      // under test here is which screen a switch leaves you on.
-      overlay.view = "home"
-      overlay.selectProfile("tmux")
-      check("home survives the switch", overlay.view, "home")
-      check("loading is announced", overlay.groundLoading, true)
-      check("picked cabinet keeps its number",
-            overlay.groundProgressLabel("tmux"), "7/86")
-      backAgain.start()
-    }
-  }
-  // And picking tmux again gets all of them back: they were never this
-  // overlay's to forget - they are on disk, under that ground's name.
-  Timer {
-    id: backAgain; interval: 4000; repeat: false
-    onTriggered: {
-      checkTmux("tmux again")
       console.log(failures ? "RUN_COUNTERS_FAILED" : "RUN_COUNTERS_OK")
       Qt.quit()
     }
   }
   Timer {
-    interval: 45000; running: true; repeat: false
+    interval: 25000; running: true; repeat: false
     onTriggered: { console.error("RUN_COUNTERS_FAILED: timeout"); Qt.quit() }
   }
 }
 EOF
 
 output=$(
-  XDG_STATE_HOME="$test_root/state" \
-  QT_QPA_PLATFORMTHEME= \
-  QT_STYLE_OVERRIDE=Fusion \
-  timeout 60s quickshell --no-color --path "$test_root/config/shell.qml" 2>&1
-)
+  HOME="$test_root/home" XDG_CONFIG_HOME="$test_root/home/.config" \
+  XDG_STATE_HOME="$test_root/state" XDG_CACHE_HOME="$test_root/cache" \
+  XDG_DATA_HOME="$test_root/data" \
+  QT_QPA_PLATFORMTHEME= QT_STYLE_OVERRIDE=Fusion \
+  timeout 30s quickshell --no-color --path "$test_root/config/shell.qml" 2>&1
+) || { printf '%s\n' "$output" >&2; exit 1; }
 
 if ! grep -Fq -- "RUN_COUNTERS_OK" <<<"$output"; then
   grep -E "RUN_COUNTERS" <<<"$output" >&2 || printf '%s\n' "$output" >&2
   exit 1
 fi
+
+python3 - "$test_root" <<'PY'
+import json, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+state = root / "state/omarchy/keycade"
+session = json.loads((state / "session.json").read_text("utf-8"))
+original = json.loads((root / "session.json").read_text("utf-8"))
+assert session["profileId"] == "lazyvim" and session["runId"] == 4, session
+for key in ("cards", "offset", "correct", "attempts", "newLearned", "masteredGained",
+            "runReviewTarget", "runNewTarget", "pendingReinforcements", "reactions",
+            "correctionRequired"):
+    assert session[key] == original[key], (key, session)
+stats = json.loads((state / "stats.json").read_text("utf-8"))
+previous = json.loads((root / "stats.json").read_text("utf-8"))
+assert stats["profiles"]["lazyvim"]["runs"] == 3, stats
+assert stats["profiles"]["tmux"] == previous["profiles"]["tmux"], stats
+for binding, entry in previous["bindings"].items():
+    assert stats["bindings"][binding] == entry, (binding, stats["bindings"][binding])
+# Counting the corpus may materialize fresh unseen entries, never progress.
+for binding in stats["bindings"].keys() - previous["bindings"].keys():
+    entry = stats["bindings"][binding]
+    assert binding.startswith("lazyvim/") and entry["state"] == "unseen", (binding, entry)
+    assert entry["firstTryAttempts"] == 0 and entry["successfulRuns"] == [], (binding, entry)
+PY
 
 printf 'run-counters QML integration test passed\n'

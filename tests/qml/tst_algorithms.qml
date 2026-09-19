@@ -9,15 +9,11 @@ import "../../lib/TextKey.js" as TextKey
 import "../../lib/Scheduler.js" as Scheduler
 import "../../lib/Stats.js" as Stats
 import "../../lib/Session.js" as Session
-import "../../lib/sources/hyprland/Eligibility.js" as Eligibility
-import "../../lib/sources/hyprland/Categorizer.js" as Categorizer
-import "../../lib/sources/hyprland/ActionLocalizer.js" as Actions
 import "../../lib/DotFont.js" as DotFont
 import "../../lib/Palettes.js" as Palettes
 import "../fixtures/canonical-keys.js" as CanonicalKeys
 import "../fixtures/text-keys.js" as TextKeys
 import "../../lib/sources/pack/Eligibility.js" as PackEligibility
-import "../../lib/sources/ExternalPackValidation.js" as ExternalPack
 import "../../lib/Packs.js" as Packs
 
 TestCase {
@@ -91,7 +87,6 @@ TestCase {
     var lower = binding({ key: "Q", description: "Close window" })
     verify(Normalizer.matches(lower, { modMask: 64, logicalKey: "Q", physicalCode: 24 },
                               { keycodeMap: map }))
-    compare(Eligibility.reason(lower, { keymapAuthoritative: true, keycodeMap: map }), "")
   }
 
   function test_keymapJudgesByKeycodeNotByProducedCharacter() {
@@ -139,26 +134,6 @@ TestCase {
                                { keycodeMap: germanMap() }))
   }
 
-  function test_unreachableBindingsAreExcludedOnlyWhenTheKeymapIsKnown() {
-    var reachable = binding({ key: ",", description: "Dismiss last notification" })
-    var unreachable = binding({ key: "/", description: "Passwords" })
-    // code: binds carry the layout-independent fallback label for the keycode.
-    var physical = binding({ key: "3", keycode: 12, matchMode: "physical",
-                             description: "Switch to workspace 3" })
-    var options = { keymapAuthoritative: true, keycodeMap: germanMap() }
-
-    compare(Eligibility.reason(unreachable, options), "unreachable-on-layout")
-    compare(Eligibility.reason(reachable, options), "")
-    // A code: bind names its keycode directly and is unaffected.
-    compare(Eligibility.reason(physical, options), "")
-    // Without a confirmed keymap the rule does not apply.
-    compare(Eligibility.reason(unreachable, {}), "")
-
-    var result = Eligibility.filter([reachable, unreachable], options)
-    compare(result.eligible.length, 1)
-    compare(result.eligible[0].key, ",")
-  }
-
   // The one-way union still lives in the normaliser, but no eligible binding
   // reaches it any more: DELETE is a device-special key, so a DELETE bind is
   // rejected before it can ever become a card. The assertions stay to pin the
@@ -172,64 +147,6 @@ TestCase {
     var backspaceBinding = binding({ key: "BACKSPACE", description: "Toggle window transparency" })
     var deleteInput = { modMask: 64, logicalKey: "DELETE", physicalCode: 119 }
     verify(!Normalizer.matches(backspaceBinding, deleteInput, { appleKeyboard: true }))
-  }
-
-  // Excluding DELETE changes what the ambiguity scan sees. On an Apple
-  // keyboard the union used to collapse SUPER+DELETE and SUPER+BACKSPACE onto
-  // one chord and drop both as ambiguous; with DELETE rejected earlier, the
-  // BACKSPACE bind is alone on its chord and becomes trainable. That is the
-  // correct answer for that hardware, where the key sends BackSpace.
-  function test_excludingDeleteFreesTheAppleBackspaceBind() {
-    var deleteBinding = binding({ key: "DELETE", description: "Close all windows" })
-    var backspaceBinding = binding({ key: "BACKSPACE", description: "Toggle window transparency" })
-
-    var result = Eligibility.filter([deleteBinding, backspaceBinding], { appleKeyboard: true })
-    compare(result.eligible.length, 1)
-    compare(result.eligible[0].key, "BACKSPACE")
-    compare(result.excluded.length, 0)
-    compare(Eligibility.reason(deleteBinding), "device-special-key")
-  }
-
-  function test_userExcludedBindingsLeaveTheEligibleSet() {
-    var kept = binding({ key: "1", arg: "1", description: "Switch to workspace 1" })
-    var dropped = binding({ key: "2", arg: "2", description: "Switch to workspace 2" })
-    var droppedId = Normalizer.bindingId(dropped)
-
-    var result = Eligibility.filter([kept, dropped], {
-      excludedBindings: ["hyprland:" + droppedId]
-    })
-    compare(result.eligible.length, 1)
-    compare(result.eligible[0].key, "1")
-    compare(result.excluded.length, 1)
-    compare(result.excluded[0].reason, "user-excluded")
-    compare(result.excluded[0].binding.key, "2")
-
-    // Another profile's entries are not consumed here.
-    var other = Eligibility.filter([kept, dropped], {
-      excludedBindings: ["lazyvim:" + droppedId]
-    })
-    compare(other.eligible.length, 2)
-  }
-
-  // Excluding one bind must not change which chords count as ambiguous, or the
-  // exclusion would silently readmit whatever shared the chord.
-  function test_userExclusionDoesNotDisturbAmbiguousChords() {
-    var first = binding({ key: "4", arg: "4", description: "Switch to workspace 4" })
-    var second = binding({ key: "4", arg: "5", description: "Switch to workspace 5" })
-    var third = binding({ key: "6", arg: "6", description: "Switch to workspace 6" })
-
-    var before = Eligibility.filter([first, second, third], {})
-    compare(before.eligible.length, 1)
-    compare(before.eligible[0].key, "6")
-
-    var after = Eligibility.filter([first, second, third], {
-      excludedBindings: ["hyprland:" + Normalizer.bindingId(first)]
-    })
-    compare(after.eligible.length, 1)
-    compare(after.eligible[0].key, "6")
-    compare(after.excluded.length, 2)
-    compare(after.excluded[0].reason, "ambiguous-chord")
-    compare(after.excluded[1].reason, "ambiguous-chord")
   }
 
   function test_excludedListIsBoundedOnBothAxes() {
@@ -449,60 +366,6 @@ TestCase {
     }), space))
   }
 
-  function test_builtinShortcutCategories() {
-    compare(Categorizer.category(binding({ description: "Close window", dispatcher: "__lua" })), "windows")
-    compare(Categorizer.category(binding({ description: "Switch to workspace 3", dispatcher: "__lua" })), "workspaces")
-    compare(Categorizer.category(binding({ description: "Lock system", dispatcher: "__lua" })), "system")
-    compare(Categorizer.category(binding({ description: "Brightness up", dispatcher: "__lua" })), "system")
-    compare(Categorizer.category(binding({ description: "Browser", dispatcher: "__lua" })), "applications")
-    compare(Categorizer.category(binding({ description: "Volume up", dispatcher: "__lua" })), "media")
-    compare(Categorizer.category(binding({ description: "Screenshot Region", dispatcher: "__lua" })), "capture")
-    compare(Categorizer.category(binding({ description: "Clipboard manager", dispatcher: "__lua" })), "utilities")
-  }
-
-  function test_eligibilityRejectsAmbiguousAndBypassingBindings() {
-    var duplicate = binding({ description: "Another action" })
-    var result = Eligibility.filter([binding({}), duplicate], {})
-    compare(result.eligible.length, 0)
-    compare(result.excluded.length, 2)
-
-    result = Eligibility.filter([binding({ dontInhibit: true })], {})
-    compare(result.eligible.length, 0)
-
-    result = Eligibility.filter([
-      binding({ key: "L", description: "Lock system", dispatcher: "__lua" }),
-      binding({ key: "B", description: "Browser", dispatcher: "__lua" })
-    ], {})
-    compare(result.eligible.length, 2)
-    compare(result.eligible[0].category, "system")
-    compare(result.eligible[1].category, "applications")
-  }
-
-  function test_eligibilityRejectsDeviceSpecialKeys() {
-    var specialBindings = [
-      binding({ key: "F1", description: "Help" }),
-      binding({ key: "F12", description: "Screenshot Display" }),
-      binding({ key: "XF86AUDIORAISEVOLUME", modMask: 0, description: "Volume up" }),
-      binding({ key: "XF86MONBRIGHTNESSDOWN", modMask: 0, description: "Brightness down" }),
-      binding({ key: "PRINT", description: "Screenshot" }),
-      binding({ key: "HOME", description: "Save window width" }),
-      binding({ key: "END", description: "Go to end" }),
-      binding({ key: "INSERT", description: "Insert mode" }),
-      binding({ key: "PAGEUP", description: "Page up" }),
-      binding({ key: "PAGEDOWN", description: "Page down" }),
-      binding({ key: "DELETE", description: "Close all windows" }),
-      binding({ key: "", keycode: 201, matchMode: "physical", description: "Hardware menu" })
-    ]
-    for (var i = 0; i < specialBindings.length; i++) {
-      compare(Eligibility.reason(specialBindings[i]), "device-special-key")
-    }
-
-    compare(Eligibility.reason(binding({ key: "TAB", description: "Next workspace" })), "")
-    // Arrow keys stay trainable: the compact boards that keep a navigation key
-    // at all keep these, and 60% users reach them through a layer.
-    compare(Eligibility.reason(binding({ key: "LEFT", description: "Focus left window" })), "")
-  }
-
   function test_guidedInputDoesNotAffectFirstTryWindow() {
     var stats = Stats.defaults()
     Stats.recordGuided(stats, "one", 1, 1000)
@@ -656,17 +519,6 @@ TestCase {
     verify(!Profiles.isPack("hyprland"))
     verify(Profiles.isPack("lazyvim"))
     verify(Profiles.isPack("tmux"))
-  }
-
-  // The eligible model carries both: the local id is what an exclusion names
-  // and must stay byte for byte what it was, the qualified one is what the
-  // scheduler and stats key on.
-  function test_eligibleBindingsCarryBothIdForms() {
-    var item = binding({ key: "7", arg: "7", description: "Switch to workspace 7" })
-    var result = Eligibility.filter([item], {})
-    compare(result.eligible.length, 1)
-    compare(result.eligible[0].localId, Normalizer.bindingId(item))
-    compare(result.eligible[0].id, "hyprland/" + Normalizer.bindingId(item))
   }
 
   function test_v1StatsMigrateWithoutInventingMastery() {
@@ -1411,29 +1263,6 @@ TestCase {
     compare(Scheduler.durationFor({ binding: three, tier: "guided", queue: "unseen" }, stats), 0)
   }
 
-  // Esc saves the run and leaves. A bind answering with a bare Esc cannot be
-  // answered at all - releasing it exits - so it is not dealt. Esc held with a
-  // modifier is a different gesture, decided on release, and stays trainable.
-  function test_bareEscapeAnswersAreNotDealtButModifiedOnesAre() {
-    var bare = binding({ modMask: 0, key: "ESCAPE", description: "Show the menu" })
-    var modified = binding({ modMask: 64, key: "ESCAPE", description: "Show the menu" })
-    compare(Eligibility.reason(bare), "escape-in-answer")
-    compare(Eligibility.reason(modified), "")
-
-    var result = Eligibility.filter([bare, modified], {})
-    compare(result.eligible.length, 1)
-    compare(result.eligible[0].modMask, 64)
-  }
-
-  // Every eligible binding carries an answer, because that is what the card
-  // draws and what the matcher judges.
-  function test_eligibleBindingsCarryAnAnswer() {
-    var item = binding({ key: "8", arg: "8", description: "Switch to workspace 8" })
-    var result = Eligibility.filter([item], {})
-    compare(AnswerMatcher.stepCount(result.eligible[0].answer), 1)
-    compare(AnswerMatcher.judgeMode(result.eligible[0].answer), "keysym")
-  }
-
   // --- packs: the compiled-in table of an application-level ground ---
 
   PackSource { id: testPack; profileId: "lazyvim" }
@@ -1569,47 +1398,6 @@ TestCase {
     compare(Profiles.resolvedOptions("tmux", ({})).prefix, "C-b")
   }
 
-  // The shipped tmux table was collected against tmux's own default of C-b,
-  // but Omarchy's tmux.conf moves the prefix to C-Space - so every Omarchy
-  // machine also enables C-Space. The prefix is detected configuration now.
-  function test_theTmuxPrefixIsDetectedRatherThanBakedIn() {
-    var pack = Packs.pack("tmux")
-    verify(pack !== null)
-    for (var index = 0; index < pack.bindings.length; index++) {
-      var steps = pack.bindings[index].steps
-      compare(steps[0].option, "prefix",
-              pack.bindings[index].localId + " does not start with the prefix option")
-      // And its identity does not contain the prefix, so moving it keeps the
-      // entry - and its progress - intact.
-      verify(pack.bindings[index].localId.indexOf("C-b") === -1)
-    }
-
-    var source = testPack
-    source.profileId = "tmux"
-    source.options = ({})
-    source.refresh()
-    compare(source.error, "")
-    verify(source.bindings.length > 50)
-    var byDefault = source.bindings[0]
-    compare(byDefault.answer.steps[0].mods, 4)
-    compare(byDefault.answer.steps[0].text, "b")
-
-    source.options = ({ prefix: "C-Space" })
-    source.refresh()
-    var moved = source.bindings[0]
-    compare(moved.answer.steps[0].named, "SPACE")
-    compare(moved.answer.steps[0].mods, 4)
-    compare(moved.id, byDefault.id)
-
-    source.options = ({ prefix: "C-b", prefix2: "C-b" })
-    source.refresh()
-    compare(source.bindings[0].answer.alternates.length, 0)
-
-    source.profileId = "lazyvim"
-    source.options = ({ leader: " " })
-    source.refresh()
-  }
-
   // A bundle LazyVim ships but does not enable is real on a machine that
   // turned it on and absent on one that did not, so what a table carries and
   // what it deals are two different things.
@@ -1691,48 +1479,6 @@ TestCase {
     compare(testPack.customDeleted, 0)
     compare(testPack.customSkipped, 1)
     testPack.overrides = []
-    testPack.refresh()
-  }
-
-  function test_theVimGrammarPackLoadsWithItsEquivalentAnswers() {
-    testPack.profileId = "vim"
-    testPack.options = ({})
-    testPack.enabledExtras = []
-    testPack.overrides = []
-    testPack.packOverride = null
-    testPack.refresh()
-    compare(testPack.error, "")
-    verify(testPack.bindings.length > 100)
-    var shorthand = null
-    for (var index = 0; index < testPack.bindings.length; index++) {
-      if (testPack.bindings[index].localId === "normal/D") shorthand = testPack.bindings[index]
-    }
-    verify(shorthand !== null)
-    compare(AnswerMatcher.alternateLabels(shorthand.answer).join(""), "d › $")
-    testPack.profileId = "lazyvim"
-    testPack.options = ({ leader: " ", localleader: "\\" })
-    testPack.refresh()
-  }
-
-  function test_anUnreadableLiveTmuxTableFallsBackToTheShippedPack() {
-    testPack.profileId = "tmux"
-    testPack.options = ({ prefix: "C-b", prefix2: "" })
-    testPack.enabledExtras = []
-    testPack.overrides = []
-    testPack.packOverride = {
-      schemaVersion: 1, profile: "tmux", judgeMode: "text",
-      contexts: ["prefix"], categories: ["misc"], extras: [],
-      provenance: {}, bindings: [
-        { localId: "prefix/bad", context: "prefix", category: "misc",
-          desc: "Unreadable", steps: [{ mods: 0, named: "ESC" }], extras: [] }
-      ]
-    }
-    testPack.refresh()
-    compare(testPack.error, "")
-    compare(testPack.packOverride, null)
-    compare(testPack.bindings.length, Packs.pack("tmux").bindings.length)
-    testPack.profileId = "lazyvim"
-    testPack.options = ({ leader: " ", localleader: "\\" })
     testPack.refresh()
   }
 
@@ -1832,36 +1578,6 @@ TestCase {
     }, ["find"]), null)
   }
 
-  function test_liveTmuxPayloadIsRebuiltFromAWhitelistedSchema() {
-    var raw = {
-      schemaVersion: 1, profile: "tmux", judgeMode: "text", available: true,
-      options: { prefix: "C-b", prefix2: "C-a" }, categories: ["misc"],
-      provenance: { upstream: "tmux", source: { tag: "live", checksum: "a".repeat(64),
-                                                 ignored: { nested: true } }, ignored: true },
-      bindings: [{
-        localId: "prefix/x", context: "prefix", notation: "prefix x",
-        steps: [{ option: "prefix", ignored: true }, { mods: 0, text: "x", ignored: true }],
-        alternates: [[{ option: "prefix2" }, { text: "x" }]], category: "misc",
-        descKey: "tmuxdesc_x", desc: "Do x", extras: [], ignored: { nested: true }
-      }],
-      ignored: { nested: true }
-    }
-    var accepted = ExternalPack.acceptedTmuxPack(raw)
-    verify(accepted !== null)
-    compare(accepted.ignored, undefined)
-    compare(accepted.bindings[0].ignored, undefined)
-    compare(accepted.bindings[0].steps[0].ignored, undefined)
-    compare(accepted.provenance.ignored, undefined)
-    compare(accepted.provenance.source.ignored, undefined)
-    raw.bindings[0].desc = "mutated"
-    compare(accepted.bindings[0].desc, "Do x")
-
-    raw.categories = ["__proto__"]
-    compare(ExternalPack.acceptedTmuxPack(raw), null)
-    compare(ExternalPack.acceptedCategories(["pane", "misc"], 32).join(","), "pane,misc")
-    compare(ExternalPack.acceptedCategories(["prototype"], 32), null)
-  }
-
   function test_schedulerCountsPrototypeNamedExternalIds() {
     var deck = [
       { binding: { id: "__proto__" }, tier: "guided", queue: "unseen" },
@@ -1880,7 +1596,7 @@ TestCase {
     testPack.profileId = "lazyvim"
     testPack.options = ({ leader: " " })
     testPack.enabledExtras = []
-    testPack.packOverride = {
+    var hostilePack = {
       schemaVersion: 1,
       profile: "lazyvim",
       judgeMode: "text",
@@ -1898,18 +1614,27 @@ TestCase {
       { op: "set", contexts: ["normal"], lhs: "g", desc: "Mine" },
       { op: "set", contexts: ["normal"], lhs: "__proto__", desc: "Nope" }
     ]
-    testPack.refresh()
-    compare(Object.prototype.constructor, originalConstructor)
-    compare(({}).pwned, undefined)
+    // No live table override survives. Exercise the same merge and consumer
+    // validation directly with hostile records before refreshing the real pack.
+    var records = testPack.mergedBindings(hostilePack)
     var foundSafe = false
-    var foundProto = false
-    for (var index = 0; index < testPack.bindings.length; index++) {
-      if (testPack.bindings[index].localId === "normal/g") foundSafe = true
-      if (testPack.bindings[index].localId === "__proto__") foundProto = true
+    var refused = 0
+    for (var index = 0; index < records.length; index++) {
+      var item = testPack.acceptedBinding(records[index], hostilePack.categories)
+      if (!item) { refused += 1; continue }
+      verify(item.localId !== "__proto__" && item.localId !== "constructor")
+      if (item.localId === "normal/g") {
+        foundSafe = true
+        compare(item.actionName, "Mine")
+        compare(item.customKind, "changed")
+      }
     }
     compare(foundSafe, true)
-    compare(foundProto, false)
-    testPack.packOverride = null
+    compare(refused, 2)
+    testPack.refresh()
+    compare(testPack.error, "")
+    compare(Object.prototype.constructor, originalConstructor)
+    compare(({}).pwned, undefined)
     testPack.overrides = []
     testPack.refresh()
   }
@@ -1943,12 +1668,13 @@ TestCase {
   // registry has to agree with it: the loader validates against the registry
   // while the pack is what the table was actually built to.
   function test_everyPackAgreesWithTheRegistryAboutItsContexts() {
-    var ids = Profiles.ids()
+    var ids = Packs.ids()
+    compare(ids.join(","), "lazyvim")
     for (var index = 0; index < ids.length; index++) {
       var id = ids[index]
-      if (!Profiles.isPack(id)) continue
+      verify(Profiles.isPack(id), id + " ships a pack but is not registered")
       var pack = Packs.pack(id)
-      verify(pack !== null, id + " is registered but ships no pack")
+      verify(pack !== null)
       compare(pack.profile, id)
       // The registry says what the ground can pose; the pack says what its
       // table actually holds. A pack context outside the registry would be
@@ -1961,8 +1687,11 @@ TestCase {
                id + " ships context " + pack.contexts[context] + " its ground does not pose")
       verify(pack.categories.length > 0, id)
     }
-    // And a ground that reads the machine ships no pack at all.
-    compare(Packs.pack("hyprland"), null)
+    // Retired supplies cannot be loaded, even while the old profile registry
+    // is awaiting its separate teardown.
+    var retired = ["hyprland", "herdr", "tmux", "vim", "neovim"]
+    for (var old = 0; old < retired.length; old++)
+      compare(Packs.pack(retired[old]), null)
   }
 
   // A pack ships the upstream's English; the language packs answer it. The
@@ -1999,19 +1728,8 @@ TestCase {
     testI18n.locale = "en"
   }
 
-  // The drawer lists what you set aside, and a row is useless without the
-  // keys: "Switch to workspace 2" is not something you can look up.
-  function test_setAsideRowsStillCarryTheirKeysOnEveryGround() {
-    var kept = binding({ key: "1", arg: "1", description: "Switch to workspace 1" })
-    var dropped = binding({ key: "2", arg: "2", description: "Switch to workspace 2" })
-    var result = Eligibility.filter([kept, dropped], {
-      excludedBindings: ["hyprland:" + Normalizer.bindingId(dropped)]
-    })
-    compare(result.excluded.length, 1)
-    var row = result.excluded[0].binding
-    verify(row.answer !== undefined, "a set-aside Hyprland bind carries no answer")
-    compare(AnswerMatcher.stepLabels(row.answer)[0].join(" + "), "SUPER + 2")
-
+  // The drawer lists what you set aside, including its answer keys.
+  function test_setAsideRowsStillCarryTheirKeys() {
     testPack.options = ({ leader: " " })
     testPack.refresh()
     var packResult = PackEligibility.filter(testPack.bindings, {
@@ -2104,18 +1822,4 @@ TestCase {
     }
   }
 
-  function test_builtinActionsHaveLocaleKeysAndCustomTextStaysRaw() {
-    compare(Actions.translation(binding({ description: "Close window" })).key, "action_closeWindow")
-    var workspace = Actions.translation(binding({ description: "Switch to workspace 3" }))
-    compare(workspace.key, "action_switchWorkspace")
-    compare(workspace.values.workspace, "3")
-    compare(Actions.translation(binding({ description: "My custom backup script", dispatcher: "__lua" })), null)
-    var chinese = {
-      messages: { action_closeWindow: "关闭当前窗口" },
-      t: function(key) { return chinese.messages[key] || key }
-    }
-    compare(Actions.actionName(binding({ description: "Close window" }), chinese), "关闭当前窗口")
-    compare(Actions.actionName(binding({ description: "My custom backup script", dispatcher: "__lua" }), chinese),
-            "My custom backup script")
-  }
 }

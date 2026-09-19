@@ -1,5 +1,4 @@
 import json
-import re
 import struct
 import sys
 import unittest
@@ -79,16 +78,6 @@ class AssetTests(unittest.TestCase):
         self.assertEqual((width, height), (1, 2))
         self.assertEqual(depth, 8)
         self.assertEqual(colour_type, 6)
-
-    def test_chinese_covers_every_recognized_builtin_action(self):
-        source = (
-            ROOT / "lib" / "sources" / "hyprland" / "ActionLocalizer.js"
-        ).read_text(encoding="utf-8")
-        action_keys = set(re.findall(r'"(action_[A-Za-z]+)"', source))
-        chinese = json.loads(
-            (ROOT / "assets" / "locales" / "zh-CN.json").read_text(encoding="utf-8")
-        )
-        self.assertTrue(action_keys.issubset(chinese), sorted(action_keys - set(chinese)))
 
 
 if __name__ == "__main__":

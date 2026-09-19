@@ -68,3 +68,27 @@ commit between removal of the old fuzz targets and the working `read_decks`
 retarget. WP1c may land first so WP2 can run alongside WP1d/1e as planned.
 This resolves the roadmap's contradictory temporary-broken-fuzzer allowance
 in favor of the user's explicit green-at-every-commit rule.
+
+## WP1c — QML source and pack teardown — PASS
+
+- Removed retired QML sources, pack assets and collectors; LazyVim's 361-card
+  payload is unchanged (asset SHA-256
+  `56d2d83ae1341526959e29fb753b96d15d00bc57f02c6e7d778427b56c29ca03`).
+- Kept only LazyVim reachable in the application. Adapted surviving integration
+  assertions for supply loading, resume, run counters and mastery.
+- Authorized allowlist expansion: `tools/screenshot-shell.qml` and
+  `tools/shoot-screenshots`, solely to remove dangling retired-ground/API calls.
+  No screenshots generated or personal state modified.
+- Orchestrator gates: 188 Python tests, 80 QML tests, lint exit 0 (baseline
+  metadata warnings only), fuzz 1000, pack regeneration, strict OpenSpec,
+  diff whitespace checks and all three isolated Wayland integration tests PASS.
+- Challenger `github-copilot/gpt-5.6-sol` with verified `xhigh`: **PASS**, no
+  blocking or advisory findings. Prior provider failures and acknowledgement-only
+  results did not count as reviews. Requested `gpt-5.8-sol` retries were rejected
+  by the provider as unsupported.
+- User paused, then authorized continuation after refreshing agent definitions.
+  Orchestrator verified the reviewed diff was byte-identical and repeated the
+  full automated gate successfully before committing.
+- Logs: `/tmp/keycade-lazyvim-decks-gates/wp1c/` and `wp1c-resume/`.
+- Tasks 1.3 and 1.4 complete; task 1.7 remains partial until helper/matcher
+  teardown completes.

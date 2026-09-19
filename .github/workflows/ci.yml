@@ -72,7 +72,6 @@ jobs:
       - name: QML Shell Integration Tests
         run: |
           su runner -c "./tests/test_state_store_qml.sh"
-          su runner -c "./tests/test_hyprland_source_qml.sh"
           su runner -c "./tests/test_ground_switching_qml.sh"
           su runner -c "./tests/test_run_counters_qml.sh"
           su runner -c "./tests/test_mastery_transition_qml.sh"

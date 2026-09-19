@@ -12,8 +12,6 @@ import "lib/Scheduler.js" as Scheduler
 import "lib/Stats.js" as Stats
 import "lib/Session.js" as Session
 import "lib/Palettes.js" as Palettes
-import "lib/sources/hyprland/Eligibility.js" as Eligibility
-import "lib/sources/hyprland/ActionLocalizer.js" as Actions
 import "lib/sources/pack/Eligibility.js" as PackEligibility
 
 Item {
@@ -25,11 +23,8 @@ Item {
   property string view: "closed"
   property string errorMessage: ""
   property bool guardReady: false
-  // A ground is not ready the moment it is picked. A pack ground reads the
-  // machine's own configuration first, which is a subprocess, so between the
-  // pick and the answer the source still holds the ground before it - and
-  // counting that was how switching cabinets showed one ground's total under
-  // another's name.
+  // The pack is ready only after the machine's configuration has arrived
+  // through the bounded reader and calibrated the compiled LazyVim table.
   property bool groundLoading: false
   property bool escapeDown: false
   property string requestedLocale: ""
@@ -51,9 +46,8 @@ Item {
   property var reviewSuggestions: []
   property var masterySnapshot: ({ attempts: 0, correct: 0, accuracy: 0, response: 0 })
   property var progressCounts: ({ unseen: 0, learning: 0, mastered: 0, due: 0, total: 0 })
-  // Every ground's last known { mastered, total }, by id - what the cabinet
-  // row draws. The active one is live; the rest are what they recorded when
-  // they were last open.
+  // The available supply's { mastered, total }, by id. Retired history stays
+  // in storage but never appears in this home-screen model.
   property var groundProgress: Object.create(null)
   property double activeSegmentStartedAt: 0
   property double cardStartedAt: 0
@@ -65,8 +59,7 @@ Item {
   // stats or the scheduler, which grade recall and spacing rather than speed.
   property int combo: 0
   property bool cardLocked: false
-  // How much of the current answer has been typed. A chord is the length-1
-  // case, so this is 0 or 1 on the Hyprland ground and never seen.
+  // How much of the current text answer has been typed.
   property int answerStep: 0
   // One cursor per accepted answer; see AnswerMatcher.begin().
   property var answerState: AnswerMatcher.begin()
@@ -103,17 +96,14 @@ Item {
   readonly property var currentAnswer: currentBinding ? currentBinding.answer : null
   readonly property var answerSteps: AnswerMatcher.stepLabels(root.currentAnswer)
   readonly property int runCardLimit: 24
-  // The ground this run is played on. Everything below reaches its rules
-  // through the profile rather than assuming them, so the only thing that
-  // changes when a cabinet is picked is this string.
-  readonly property string profileId: Profiles.known(store.settings.activeProfile)
-      ? String(store.settings.activeProfile) : Profiles.defaultId()
-  readonly property bool packGround: Profiles.isPack(root.profileId)
-  readonly property bool herdrGround: root.profileId === "herdr"
-  // A pack ground answers loaded() the moment it is asked; a machine ground
-  // has to go and collect. Above this line the two are the same thing.
-  readonly property var activeSource: root.packGround ? packs
-                                    : root.herdrGround ? herdr : keybinds
+  // Read-only readiness for non-interactive tooling; selecting another supply
+  // is no longer available as a way to wait for persisted settings.
+  readonly property bool stateReady: store.ready
+  // Only the LazyVim supply remains. Ignore retired activeProfile values
+  // without deleting their stored history; state migration is a later step.
+  readonly property string profileId: "lazyvim"
+  readonly property var availableProfiles: ["lazyvim"]
+  readonly property var activeSource: packs
   // Long enough to read the stamp, not long enough to feel like a penalty.
   // 300 ms measured worse than it sounds: the 110 ms fade eats a third of it,
   // so the words were legible for under two tenths of a second.
@@ -245,18 +235,8 @@ Item {
   // asked once persisted settings are loaded and its detected config arrives.
   function loadActiveGround() {
     root.groundLoading = true
-    if (root.packGround) {
-      // Ask the machine what it changed, then build the table against the
-      // answer. A ground with nothing readable answers immediately.
-      appConfig.profileId = root.profileId
-      appConfig.refresh()
-      return
-    }
-    if (root.herdrGround) {
-      herdr.refresh()
-      return
-    }
-    keybinds.refresh()
+    appConfig.profileId = root.profileId
+    appConfig.refresh()
   }
 
   function maybeShowHome() {
@@ -289,18 +269,10 @@ Item {
   // through it, so the mastery denominator - which is the size of this set -
   // moves with them instead of at the next launch.
   function applyEligibility() {
-    var result = root.packGround || root.herdrGround
-        ? PackEligibility.filter(root.activeSource.bindings, {
-            excludedBindings: store.settings.excludedBindings,
-            profile: root.profileId
-          })
-        : Eligibility.filter(keybinds.bindings, {
-            appleKeyboard: keybinds.appleKeyboard,
-            keymapAuthoritative: keybinds.keymapAuthoritative,
-            keycodeMap: keybinds.keycodeMap,
-            excludedBindings: store.settings.excludedBindings,
-            profile: root.profileId
-          })
+    var result = PackEligibility.filter(packs.bindings, {
+      excludedBindings: store.settings.excludedBindings,
+      profile: root.profileId
+    })
     var rows = []
     var matched = Session.safeMap()
     for (var i = 0; i < result.excluded.length; i++) {
@@ -428,33 +400,6 @@ Item {
     root.applyEligibility()
   }
 
-  // Picking a cabinet. Not offered mid-run: a deck belongs to one ground, and
-  // swapping under it would mix two decks and two run counters.
-  function selectProfile(id) {
-    if (root.view === "playing" || !Profiles.known(id) || id === root.profileId) return
-    // The choice is recorded in settings, so it cannot be made before they
-    // have loaded: the store would overwrite it as it finished reading.
-    if (!store.ready) return
-    store.settings.activeProfile = String(id)
-    store.settings = Object.assign({}, store.settings)
-    store.saveSettings()
-    root.eligibleBindings = []
-    root.excludedRows = []
-    root.staleExcludedCount = 0
-    root.trainingLockedOut = false
-    root.excludedMenuOpen = false
-    // Only a cold start goes to the loading screen. Switching cabinets from
-    // the home screen stays on it: the row already knows what every ground
-    // last counted, so there is nothing to go and fetch before it can be
-    // drawn, and tearing the screen down and back up for the wait read as a
-    // page reload rather than as picking a machine.
-    if (root.view !== "home") root.view = "loading"
-    root.errorMessage = ""
-    // Every ground answers through a signal now - a pack one reads the
-    // machine's configuration first - so nothing is counted here.
-    root.loadActiveGround()
-  }
-
   function localeLabel(code) {
     if (code === "zh-CN") return "简体中文"
     return "English"
@@ -497,65 +442,27 @@ Item {
     store.saveSettings()
   }
 
-  // The reproduced keymap decides judging when it is available; without it the
-  // matcher keeps comparing characters exactly as before.
-  // The reproduced keymap decides judging on the Hyprland ground; the text
-  // mode compares characters and has no use for it.
-  function matchOptions() {
-    if (root.packGround || root.herdrGround) return ({})
-    return {
-      appleKeyboard: keybinds.appleKeyboard,
-      keycodeMap: keybinds.keymapAuthoritative ? keybinds.keycodeMap : null
-    }
-  }
-
   // Read at each use rather than cached in a property: a training ground's
   // record is created the first time it records anything, and a binding taken
   // before that would keep pointing at a detached copy of the defaults.
   function profileCounters() { return Stats.counters(store.stats, root.profileId) }
 
   function detectedOptions() {
-    if (root.profileId === "tmux" && tmuxLive.pack && tmuxLive.options)
-      return tmuxLive.options
     return appConfig.options || ({})
   }
 
   // What the source is handed: every declared option, resolved automatically.
-  // tmux's C-b is displayed first whenever it is one of the server/config's
-  // actual prefixes; other real prefixes remain accepted as alternates.
   function profileOptions() {
     return Profiles.resolvedOptions(root.profileId, root.detectedOptions())
   }
 
-  // The reader answered; build the table against what it said.
+  // The reader answered; calibrate the shipped table with the same extras,
+  // literal keymaps and leaders as before. No external table replaces it.
   function applyDetectedConfig() {
-    if (!root.packGround) {
-      root.groundReady()
-      return
-    }
-    // Querying an already-running tmux server is optional. The live reader
-    // first proves one exists; if it cannot, the same callback receives null
-    // and the shipped table remains the complete fallback.
-    if (root.profileId === "tmux") {
-      tmuxLive.refresh()
-      return
-    }
-    root.buildPack(null)
-  }
-
-  function applyTmuxLive() {
-    // A slow answer for a cabinet the user has already left must not replace
-    // the newly selected ground's table.
-    if (root.profileId !== "tmux") return
-    root.buildPack(tmuxLive.pack)
-  }
-
-  function buildPack(overridePack) {
     packs.profileId = root.profileId
     packs.options = root.profileOptions()
     packs.enabledExtras = appConfig.extras
-    packs.overrides = root.profileId === "lazyvim" ? appConfig.bindings : []
-    packs.packOverride = overridePack || null
+    packs.overrides = appConfig.bindings
     packs.refresh()
   }
 
@@ -593,11 +500,8 @@ Item {
     return true
   }
 
-  // A run belongs to one ground, and so does every number a run produces. The
-  // header row and the counters beside the deck are drawn on the home screen
-  // too, so leaving a tmux run and picking LazyVim used to leave tmux's run
-  // number, progress, targets, streak and "new learned" sitting under
-  // LazyVim's name until the next run happened to overwrite them.
+  // The home-screen header and counters must describe the resumable LazyVim
+  // run, not stale values left by a previous run or retired saved session.
   //
   // Only one session is kept, tagged with its ground. So: if this ground is
   // the one that can be resumed, what is on screen is that run's - it is what
@@ -632,14 +536,9 @@ Item {
     root.energy = 1
   }
 
-  // One line for an answer, wherever a list has no room to draw its steps. A
-  // chord renders exactly as it always did; a sequence puts a gap between its
-  // steps rather than a plus, because they are typed one after another.
-  // A pack entry carries its own description; a Hyprland bind has one derived
-  // from the dispatcher and looked up in the language pack.
+  // A pack entry carries its upstream description and optional translation.
   function actionName(binding) {
     if (!binding) return ""
-    if (!root.packGround && !root.herdrGround) return Actions.actionName(binding, i18n)
     // A pack ships the upstream's English. Show the translation when the
     // language pack has one, and the English when it does not - which is what
     // an upstream that rewrote its description leaves behind.
@@ -665,11 +564,8 @@ Item {
 
   function refreshProgressCounts() {
     root.progressCounts = Stats.counts(store.stats, root.eligibleBindings, Date.now(), root.activeRunId)
-    // The cabinet row shows every ground's progress, not only this one's, and
-    // the others cannot be counted from here: two of them read the machine
-    // through a subprocess, and a pack's eligible set depends on exclusions
-    // and on which extras are switched on. So each ground records what it
-    // counted while it was open, and the row reads that back.
+    // Keep the existing progress record until the later deck-state migration.
+    // The eligible total follows exclusions and the enabled extras.
     if (store.ready && root.eligibleBindings.length
         && Stats.noteProgress(store.stats, root.profileId,
                               root.progressCounts.mastered, root.progressCounts.total)
@@ -681,7 +577,7 @@ Item {
   // redraw: the statistics are mutated in place, so a delegate bound straight
   // to them would never hear that they moved.
   function refreshGroundProgress() {
-    var ids = Profiles.ids()
+    var ids = root.availableProfiles
     var progress = Session.safeMap()
     for (var index = 0; index < ids.length; index++) {
       var counters = Stats.counters(store.stats, ids[index])
@@ -969,7 +865,7 @@ Item {
     var input = Normalizer.normalizeEvent(event)
     if (input.autoRepeat || Normalizer.isModifier(input.logicalKey)) return
     var state = root.answerState
-    var verdict = AnswerMatcher.advance(state, root.currentAnswer, event, root.matchOptions())
+    var verdict = AnswerMatcher.advance(state, root.currentAnswer, event, {})
     root.answerState = state
     root.answerStep = AnswerMatcher.typedSteps(state)
     // A step landed and more remain: the card's own deadline keeps running,
@@ -1191,30 +1087,9 @@ Item {
       guard.fail(message)
     }
   }
-  HyprlandSource {
-    id: keybinds
-    onLoaded: root.groundReady()
-    onFailed: function(message) {
-      root.errorMessage = message
-      guard.fail(message)
-    }
-  }
-  HerdrSource {
-    id: herdr
-    onLoaded: root.groundReady()
-    onFailed: function(message) {
-      // A ground that could not be read has nothing to teach. It says so on
-      // the home screen rather than dealing cards built on a guess.
-      root.groundReady()
-    }
-  }
   AppConfigSource {
     id: appConfig
     onFinished: root.applyDetectedConfig()
-  }
-  TmuxLiveSource {
-    id: tmuxLive
-    onFinished: root.applyTmuxLive()
   }
   PackSource {
     id: packs
@@ -2044,9 +1919,8 @@ Item {
           color: root.coinColor
           font.pixelSize: 15; wrapMode: Text.WordWrap
         }
-        // Choosing a cabinet, which is what a training ground is. A ground is
-        // picked here rather than from the top bar: the menus up there are
-        // preferences that can change mid-run, and this one decides the deck.
+        // Keep the existing cabinet presentation for the sole available supply;
+        // deck selection and its new UI are a separate step.
         SafeText {
           width: parent.width; horizontalAlignment: Text.AlignHCenter
           visible: root.view === "home"
@@ -2059,7 +1933,7 @@ Item {
           spacing: 8
           visible: root.view === "home"
           Repeater {
-            model: Profiles.rows()
+            model: [root.availableProfiles]
             delegate: Row {
               id: groundRow
               required property var modelData
@@ -2093,10 +1967,6 @@ Item {
                        : root.mutedColor
                   font.family: "monospace"; font.pixelSize: 10; font.bold: true
                 }
-              }
-              MouseArea {
-                anchors.fill: parent
-                onClicked: root.selectProfile(groundDatum.modelData)
               }
             }
           }
