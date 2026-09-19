@@ -313,3 +313,17 @@ M1/M2 are closed, and the side lane is removed before WP4 as planned.
   target counts; no-match, read-only-all, missing-target, capacity and empty-deck
   notices. COMING SOON was removed. Task 5.2 complete; HUD and final localization
   remain separate packages.
+
+## WP7c — dynamic HUD denominator — PASS
+
+- The HUD now renders completedCardCount / sessionSize, preserving numerator
+  formatting and the existing 24-card scheduler/resume bound. Stable selectors
+  identify actual DotNumber delegates without depending on locale labels.
+- A three-launch behavioral test reads the actual rendered HUD for pre-session
+  0, large-deck 24, a seven-card run, nonzero-offset exact resume, config shrink
+  to six and in-run exclusion shrink to five. Existing home tests are unchanged.
+- Orchestrator full gate: **186 Python**, all QML suites (73/21/56/7/22), lint
+  exit 0 with baseline warnings, fuzz 1000, strict validation and whitespace
+  checks PASS. Logs: `wp7c/`.
+- Initial Challenger provider stream failed without a verdict; the resumed
+  review returned **PASS**, no findings. Task 5.4 complete.

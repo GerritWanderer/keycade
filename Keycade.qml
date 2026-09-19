@@ -2242,12 +2242,12 @@ Item {
             width: parent.width; height: 58
             Repeater {
               model: [
-                { label: i18n.t("run"), value: String(root.runNumber).padStart(2, "0") },
-                { label: i18n.t("progress"), value: String(root.completedCardCount()).padStart(2, "0") + " / " + root.runCardLimit },
-                { label: i18n.t("runReview"), value: root.runReviewTarget },
-                { label: i18n.t("runNew"), value: root.runNewTarget },
-                { label: i18n.t("reinforce"), value: root.pendingReinforcementCount() },
-                { label: i18n.t("accuracy"), value: root.accuracyPercent() + "%" }
+                { key: "run", label: i18n.t("run"), value: String(root.runNumber).padStart(2, "0") },
+                { key: "progress", label: i18n.t("progress"), value: String(root.completedCardCount()).padStart(2, "0") + " / " + root.sessionSize },
+                { key: "runReview", label: i18n.t("runReview"), value: root.runReviewTarget },
+                { key: "runNew", label: i18n.t("runNew"), value: root.runNewTarget },
+                { key: "reinforce", label: i18n.t("reinforce"), value: root.pendingReinforcementCount() },
+                { key: "accuracy", label: i18n.t("accuracy"), value: root.accuracyPercent() + "%" }
               ]
               delegate: Item {
                 id: hudDatum
@@ -2259,12 +2259,14 @@ Item {
                   SafeText { width: parent.width; horizontalAlignment: Text.AlignHCenter; elide: Text.ElideRight; text: hudDatum.modelData.label; color: root.mutedColor; font.family: "monospace"; font.pixelSize: 9; font.bold: true }
                   // Deliberately the small cell: the widest reading here is
                   // "07 / 24", seven glyphs, and at cell 3 that outgrows a
-                  // sixth of the strip on a 1024 wide screen.
+                  // sixth of the strip on a 1024 wide screen. sessionSize is
+                  // engine-bounded at runCardLimit, so that reading still holds.
                   Item {
                     width: parent.width; height: 26
                     DotNumber {
                       anchors.horizontalCenter: parent.horizontalCenter
                       anchors.verticalCenter: parent.verticalCenter
+                      objectName: "hudValue:" + hudDatum.modelData.key
                       value: String(hudDatum.modelData.value)
                       cell: 2
                       gap: 1

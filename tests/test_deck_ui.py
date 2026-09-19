@@ -1,4 +1,5 @@
-"""Actual home deck-list UI behaviour, driven through the real component.
+"""Actual home deck-list and session HUD behaviour, driven through the real
+component.
 
 The temporary copy replaces only the focus guard and the PanelWindow shell;
 the overlay, deck engine, store, reader, pack calibration and the real home
@@ -451,6 +452,123 @@ class DeckHomeUiTests(DeckUiHarness):
         self.assertEqual(report.get("saved"), str(target))
         self.assertGreater(target.stat().st_size, 1000)
         print(f"render saved: {target}")
+
+
+class DeckHudUiTests(DeckUiHarness):
+    """Rendered session HUD progress against live session sizes (task 5.4).
+
+    The denominator is read back from the actual DotNumber cell via its stable
+    selector, not from the engine property the cell is bound to. Reads wait one
+    pump (test.later) after each mutation so the Repeater model and delegates
+    have re-evaluated before the rendered string is sampled.
+    """
+
+    HUD = '''
+  function hudProgress() {
+    var cell = byName(overlay, "hudValue:progress")
+    check(cell, "progress HUD datum exists")
+    return String(cell.value)
+  }
+'''
+
+    def read_state(self, kind):
+        return json.loads((self.home / f"state/omarchy/keycade/{kind}.json").read_text())
+
+    def prepare_tiny_deck(self):
+        self.write_decks([{"id": "tiny", "name": "Tiny Seven"}])
+        self.write_state("settings", {"schemaVersion": 4, "activeDeck": "tiny", "locale": "en",
+                                      "feedbackSound": False, "countdownSound": False,
+                                      "excludedBindings": [],
+                                      "deckCards": {"tiny": {"added": IDS[:7], "removed": []}}})
+        self.write_state("stats", {"schemaVersion": 5, "runSequence": 40, "bindings": {}, "decks": {}})
+
+    def test_progress_denominator_tracks_live_resumed_and_shrunk_session(self):
+        self.prepare_tiny_deck()
+        self.launch('''
+          if (test.step === 0) {
+            test.check(test.hudProgress() === "00 / 0", "no active session yet: [" + test.hudProgress() + "]")
+            test.check(overlay.selectDeck("all"), "all selectable")
+            test.byName(overlay, "startButtonArea").clicked(null)
+            test.check(overlay.view === "playing" && overlay.sessionSize === 24,
+                       "big deck capped at 24: " + overlay.sessionSize)
+            test.step = 1; test.later(); return
+          }
+          if (test.step === 1) {
+            test.check(test.hudProgress() === "00 / 24", "big deck HUD: [" + test.hudProgress() + "]")
+            overlay.leaveRun()
+            test.check(overlay.selectDeck("tiny") && !overlay.resumeAvailable,
+                       "foreign session not adopted")
+            test.byName(overlay, "startButtonArea").clicked(null)
+            test.check(overlay.view === "playing" && overlay.sessionSize === 7,
+                       "small deck dealt whole: " + overlay.sessionSize)
+            test.step = 2; test.later(); return
+          }
+          if (test.step === 2) {
+            test.check(test.hudProgress() === "00 / 7", "small deck HUD: [" + test.hudProgress() + "]")
+            overlay.hitCurrent()
+            test.step = 3; test.later(); return
+          }
+          if (test.step === 3) {
+            test.check(test.hudProgress() === "01 / 7", "completed hit reflected: [" + test.hudProgress() + "]")
+            overlay.advanceCard()
+            overlay.leaveRun()
+            test.check(overlay.resumeAvailable && overlay.deckId === "tiny", "interrupted run resumable")
+          }
+        ''', helpers=self.HUD)
+        # Exact resume: offset one plus six remaining cards keeps the dealt size.
+        self.launch('''
+          if (test.step === 0) {
+            test.check(overlay.deckId === "tiny" && overlay.resumeAvailable, "tiny session pending")
+            test.check(overlay.sessionSize === 7, "adopted exact size")
+            test.step = 1; test.later(); return
+          }
+          if (test.step === 1) {
+            test.check(test.hudProgress() === "01 / 7",
+                       "home adopts resumed progress: [" + test.hudProgress() + "]")
+            overlay.resumeRun()
+            test.check(overlay.view === "playing" && overlay.runOffset === 1
+                       && overlay.deck.length === 6, "exact resume geometry")
+            test.step = 2; test.later(); return
+          }
+          if (test.step === 2) {
+            test.check(test.hudProgress() === "01 / 7", "resumed HUD exact: [" + test.hudProgress() + "]")
+            overlay.leaveRun()
+          }
+        ''', helpers=self.HUD)
+        # Approved D7 shrink: a remaining card leaves the deck before resume.
+        session = self.read_state("session")
+        self.assertEqual(session["offset"], 1)
+        settings = self.read_state("settings")
+        settings["deckCards"]["tiny"]["removed"] = [session["cards"][0]["bindingId"]]
+        self.write_state("settings", settings)
+        self.launch('''
+          if (test.step === 0) {
+            test.check(overlay.deckId === "tiny" && overlay.resumeAvailable, "shrunk session pending")
+            test.check(overlay.sessionSize === 6, "adopted shrunk size")
+            test.step = 1; test.later(); return
+          }
+          if (test.step === 1) {
+            test.check(test.hudProgress() === "01 / 6",
+                       "home shows shrunk denominator: [" + test.hudProgress() + "]")
+            overlay.resumeRun()
+            test.check(overlay.view === "playing" && overlay.runOffset === 1
+                       && overlay.deck.length === 5, "shrunk resume keeps the nonzero offset")
+            test.step = 2; test.later(); return
+          }
+          if (test.step === 2) {
+            test.check(test.hudProgress() === "01 / 6", "shrunk HUD: [" + test.hudProgress() + "]")
+            test.data.excluded = overlay.currentBinding.id
+            overlay.excludeCurrentBinding()
+            test.check(overlay.excludeStampVisible, "in-run exclusion accepted")
+            overlay.dropExcludedCard(test.data.excluded)
+            test.check(overlay.sessionSize === 5, "in-run shrink keeps offset plus remaining")
+            test.step = 3; test.later(); return
+          }
+          if (test.step === 3) {
+            test.check(test.hudProgress() === "01 / 5", "in-run shrink HUD: [" + test.hudProgress() + "]")
+            overlay.leaveRun()
+          }
+        ''', helpers=self.HUD)
 
 
 if __name__ == "__main__":
