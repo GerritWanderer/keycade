@@ -231,6 +231,38 @@ SENTINEL_DESCRIPTIONS = re.compile(r"^\+|^which_key_ignore$")
 # A compact keyboard is not guaranteed to carry these.
 DEVICE_SPECIAL = {"HOME", "END", "PAGEUP", "PAGEDOWN", "INSERT", "DEL"}
 
+# Upstream gives some actions two keys and the same description for both. A
+# card is the description asking for the keys, so those two cards pose the
+# identical question and accept different answers - there is no way to be
+# right on purpose. The pack keeps the idiomatic key's wording and marks the
+# other as the alternative, so each card names one answer. Keyed by localId
+# because that is what survives a rewording upstream; tests/test_build_packs.py
+# fails on an entry no key carries any more.
+DESCRIPTION_OVERRIDES = {
+    "lazyvim": {
+        # The bracket pair is the idiom; the other key is the spare.
+        "normal/<S-h>": "Prev Buffer (alt)",
+        "normal/<S-l>": "Next Buffer (alt)",
+        "normal/<leader>`": "Switch to Other Buffer (alt)",
+        "normal/<a-n>": "Next Reference (alt)",
+        "normal/<a-p>": "Prev Reference (alt)",
+        # One picker behind two doors: the short top-level key is the one
+        # LazyVim puts in front of you, and the which-key group repeats it.
+        "normal/<leader>ff": "Find Files (Root Dir, alt)",
+        "normal/<leader>sg": "Grep (Root Dir, alt)",
+        "normal/<leader>sc": "Command History (alt)",
+        "normal/<leader>fe": "Explorer Snacks (root dir, alt)",
+        "normal/<leader>fE": "Explorer Snacks (cwd, alt)",
+        # yanky binds one action to both cases of the same key.
+        "normal/[P": "Put Indented Before Cursor (Linewise, alt)",
+        "normal/]P": "Put Indented After Cursor (Linewise, alt)",
+        # dial's g-mode, which is only really a different action in a visual
+        # block. In normal mode it is the same increment.
+        "normal/g<C-a>": "Increment (alt)",
+        "normal/g<C-x>": "Decrement (alt)",
+    },
+}
+
 # LazyVim's own which-key groups, which are how a user already thinks about
 # these. The first match wins, so the longer prefixes come first.
 CATEGORY_PREFIXES = [
@@ -425,11 +457,12 @@ def collect_lazyvim(site: Path, lazyvim: Path, leader: str, localleader: str,
         if not row["desc"] or SENTINEL_DESCRIPTIONS.search(row["desc"]):
             drop("missing-description")
             continue
-        category = category_for(lhs, row["section"])
-        if category == "misc":
-            category = category_from_description(row["desc"])
         context = TRAINED_MODES[modes[0]]
         local_id = context + "/" + lhs
+        desc = DESCRIPTION_OVERRIDES["lazyvim"].get(local_id, row["desc"])
+        category = category_for(lhs, row["section"])
+        if category == "misc":
+            category = category_from_description(desc)
         existing = seen.get(local_id)
         if existing is not None:
             # The same key can be provided by the core and by an extra that
@@ -451,8 +484,8 @@ def collect_lazyvim(site: Path, lazyvim: Path, leader: str, localleader: str,
             "notation": lhs,
             "steps": steps,
             "category": category,
-            "descKey": description_key("lazyvim", row["desc"]),
-            "desc": row["desc"],
+            "descKey": description_key("lazyvim", desc),
+            "desc": desc,
             # Empty means the core provides it, so it is always dealt. Anything
             # here is an opt-in bundle, and the entry is dealt only on a machine
             # whose lazyvim.json turned one of them on.

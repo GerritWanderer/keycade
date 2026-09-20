@@ -256,8 +256,8 @@
     }
    ],
    "category": "edit",
-   "descKey": "packdesc_lazyvim_prev_buffer",
-   "desc": "Prev Buffer",
+   "descKey": "packdesc_lazyvim_prev_buffer_alt",
+   "desc": "Prev Buffer (alt)",
    "extras": []
   },
   {
@@ -271,8 +271,8 @@
     }
    ],
    "category": "edit",
-   "descKey": "packdesc_lazyvim_next_buffer",
-   "desc": "Next Buffer",
+   "descKey": "packdesc_lazyvim_next_buffer_alt",
+   "desc": "Next Buffer (alt)",
    "extras": []
   },
   {
@@ -349,8 +349,8 @@
     }
    ],
    "category": "buffer",
-   "descKey": "packdesc_lazyvim_switch_to_other_buffer",
-   "desc": "Switch to Other Buffer",
+   "descKey": "packdesc_lazyvim_switch_to_other_buffer_alt",
+   "desc": "Switch to Other Buffer (alt)",
    "extras": []
   },
   {
@@ -2126,8 +2126,8 @@
     }
    ],
    "category": "lsp",
-   "descKey": "packdesc_lazyvim_next_reference",
-   "desc": "Next Reference",
+   "descKey": "packdesc_lazyvim_next_reference_alt",
+   "desc": "Next Reference (alt)",
    "extras": []
   },
   {
@@ -2141,8 +2141,8 @@
     }
    ],
    "category": "lsp",
-   "descKey": "packdesc_lazyvim_prev_reference",
-   "desc": "Prev Reference",
+   "descKey": "packdesc_lazyvim_prev_reference_alt",
+   "desc": "Prev Reference (alt)",
    "extras": []
   },
   {
@@ -3030,8 +3030,8 @@
     }
    ],
    "category": "find",
-   "descKey": "packdesc_lazyvim_explorer_snacks_root_dir",
-   "desc": "Explorer Snacks (root dir)",
+   "descKey": "packdesc_lazyvim_explorer_snacks_root_dir_alt",
+   "desc": "Explorer Snacks (root dir, alt)",
    "extras": []
   },
   {
@@ -3052,8 +3052,8 @@
     }
    ],
    "category": "find",
-   "descKey": "packdesc_lazyvim_explorer_snacks_cwd",
-   "desc": "Explorer Snacks (cwd)",
+   "descKey": "packdesc_lazyvim_explorer_snacks_cwd_alt",
+   "desc": "Explorer Snacks (cwd, alt)",
    "extras": []
   },
   {
@@ -3074,8 +3074,8 @@
     }
    ],
    "category": "find",
-   "descKey": "packdesc_lazyvim_find_files_root_dir",
-   "desc": "Find Files (Root Dir)",
+   "descKey": "packdesc_lazyvim_find_files_root_dir_alt",
+   "desc": "Find Files (Root Dir, alt)",
    "extras": []
   },
   {
@@ -3528,8 +3528,8 @@
     }
    ],
    "category": "search",
-   "descKey": "packdesc_lazyvim_command_history",
-   "desc": "Command History",
+   "descKey": "packdesc_lazyvim_command_history_alt",
+   "desc": "Command History (alt)",
    "extras": []
   },
   {
@@ -3616,8 +3616,8 @@
     }
    ],
    "category": "search",
-   "descKey": "packdesc_lazyvim_grep_root_dir",
-   "desc": "Grep (Root Dir)",
+   "descKey": "packdesc_lazyvim_grep_root_dir_alt",
+   "desc": "Grep (Root Dir, alt)",
    "extras": []
   },
   {
@@ -5107,8 +5107,8 @@
     }
    ],
    "category": "navigation",
-   "descKey": "packdesc_lazyvim_put_indented_before_cursor_linewise",
-   "desc": "Put Indented Before Cursor (Linewise)",
+   "descKey": "packdesc_lazyvim_put_indented_before_cursor_linewise_alt",
+   "desc": "Put Indented Before Cursor (Linewise, alt)",
    "extras": [
     "lazyvim.plugins.extras.coding.yanky"
    ]
@@ -5170,8 +5170,8 @@
     }
    ],
    "category": "navigation",
-   "descKey": "packdesc_lazyvim_put_indented_after_cursor_linewise",
-   "desc": "Put Indented After Cursor (Linewise)",
+   "descKey": "packdesc_lazyvim_put_indented_after_cursor_linewise_alt",
+   "desc": "Put Indented After Cursor (Linewise, alt)",
    "extras": [
     "lazyvim.plugins.extras.coding.yanky"
    ]
@@ -5744,8 +5744,8 @@
     }
    ],
    "category": "edit",
-   "descKey": "packdesc_lazyvim_increment",
-   "desc": "Increment",
+   "descKey": "packdesc_lazyvim_increment_alt",
+   "desc": "Increment (alt)",
    "extras": [
     "lazyvim.plugins.extras.editor.dial"
    ]
@@ -5765,8 +5765,8 @@
     }
    ],
    "category": "edit",
-   "descKey": "packdesc_lazyvim_decrement",
-   "desc": "Decrement",
+   "descKey": "packdesc_lazyvim_decrement_alt",
+   "desc": "Decrement (alt)",
    "extras": [
     "lazyvim.plugins.extras.editor.dial"
    ]
