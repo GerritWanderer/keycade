@@ -207,6 +207,24 @@ class PackTests(unittest.TestCase):
                     # A translation that is still the English text is not one.
                     self.assertNotEqual(chinese[key], entry["desc"])
 
+    def test_renamed_descriptions_are_carried_by_the_pack(self):
+        # An override renames a key upstream describes exactly like another
+        # one, so the two cards stop posing the same question. It is keyed by
+        # localId, and upstream is free to retire that key or reword it into
+        # something the override no longer disambiguates - so the pack has to
+        # still carry the rename, and it has to still be the only card with
+        # that wording.
+        for profile, overrides in build_packs.DESCRIPTION_OVERRIDES.items():
+            pack = self.packs[profile]
+            by_id = {entry["localId"]: entry for entry in pack["bindings"]}
+            for local_id, desc in overrides.items():
+                with self.subTest(pack=profile, entry=local_id):
+                    self.assertIn(local_id, by_id, "override names no key in the pack")
+                    self.assertEqual(by_id[local_id]["desc"], desc)
+            descriptions = [entry["desc"] for entry in pack["bindings"]]
+            for desc in overrides.values():
+                self.assertEqual(descriptions.count(desc), 1, f"{desc} is not unique")
+
     def test_no_two_descriptions_share_a_key(self):
         # The slug drops punctuation, so LazyVim's "Next" and Neovim's ":next"
         # produced one key and one translation silently replaced the other.
