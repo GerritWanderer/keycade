@@ -1,21 +1,21 @@
-# Keycade
+# Keycade LazyVim
 
 **English** | [简体中文](README.zh-CN.md)
 
 > An arcade-style LazyVim shortcut recall trainer for Omarchy (Wayland), driven by your own decks
 
-[![CI](https://github.com/luneth90/keycade/actions/workflows/ci.yml/badge.svg)](https://github.com/luneth90/keycade/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/luneth90/keycade/actions/workflows/codeql.yml/badge.svg)](https://github.com/luneth90/keycade/actions/workflows/codeql.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/luneth90/keycade/badge)](https://scorecard.dev/viewer/?uri=github.com/luneth90/keycade)
+[![CI](https://github.com/GerritWanderer/keycade-lazyvim/actions/workflows/ci.yml/badge.svg)](https://github.com/GerritWanderer/keycade-lazyvim/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/GerritWanderer/keycade-lazyvim/actions/workflows/codeql.yml/badge.svg)](https://github.com/GerritWanderer/keycade-lazyvim/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/GerritWanderer/keycade-lazyvim/badge)](https://scorecard.dev/viewer/?uri=github.com/GerritWanderer/keycade-lazyvim)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14452/badge)](https://www.bestpractices.dev/projects/14452)
-[![codecov](https://codecov.io/gh/luneth90/keycade/branch/main/graph/badge.svg)](https://codecov.io/gh/luneth90/keycade)
-[![Omarchy Marketplace](https://img.shields.io/badge/Omarchy%20Marketplace-listed-2ea44f?logo=omarchy)](https://plugins.omarchy.org/plugin.html?id=luneth90.keycade)
-[![GitHub Release](https://img.shields.io/github/v/release/luneth90/keycade?logo=github)](https://github.com/luneth90/keycade/releases)
+[![codecov](https://codecov.io/gh/GerritWanderer/keycade-lazyvim/branch/main/graph/badge.svg)](https://codecov.io/gh/GerritWanderer/keycade-lazyvim)
+[![Omarchy Marketplace](https://img.shields.io/badge/Omarchy%20Marketplace-listed-2ea44f?logo=omarchy)](https://plugins.omarchy.org/plugin.html?id=gerritwanderer.keycade-lazyvim)
+[![GitHub Release](https://img.shields.io/github/v/release/GerritWanderer/keycade-lazyvim?logo=github)](https://github.com/GerritWanderer/keycade-lazyvim/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ![A LazyVim leader sequence](docs/screenshots/keycade-lazyvim-en.png)
 
-Keycade is a native Omarchy desktop overlay that turns LazyVim shortcut memorization into quick, arcade-style training runs. Keypresses are captured and judged locally through a Wayland inhibitor, never triggering desktop actions during a session.
+Keycade LazyVim is a native Omarchy desktop overlay that turns LazyVim shortcut memorization into quick, arcade-style training runs. Keypresses are captured and judged locally through a Wayland inhibitor, never triggering desktop actions during a session.
 
 The training corpus is the official LazyVim key table, calibrated automatically to your leader keys, enabled extras, and `lua/config/keymaps.lua` overrides. Your study scope is a **deck**: the reserved `all` deck containing every eligible card, the four shipped starter decks, or collections you declare yourself in `decks.json`. Each deck keeps its own card counts, run counters, and mastery status, while per-card recall history stays shared across decks.
 
@@ -41,24 +41,24 @@ The training corpus is the official LazyVim key table, calibrated automatically 
 - `qt6-multimedia` (the overlay imports `QtMultimedia` for its sound effects)
 - Python 3
 
-Keycade requires active input inhibition to run safely. If Wayland shortcut protection cannot be verified, it refuses to launch rather than falling back to an insecure focus-only mode.
+Keycade LazyVim requires active input inhibition to run safely. If Wayland shortcut protection cannot be verified, it refuses to launch rather than falling back to an insecure focus-only mode.
 
 ## Installation
 
 ```bash
-omarchy plugin add https://github.com/luneth90/keycade.git --enable
+omarchy plugin add https://github.com/GerritWanderer/keycade-lazyvim.git --enable
 ```
 
 Bind a shortcut in `~/.config/hypr/bindings.lua`, for example:
 
 ```bash
-echo 'o.bind("SUPER + SHIFT + K", "Keycade", "omarchy-shell shell summon luneth90.keycade '\''{}'\''")' >> ~/.config/hypr/bindings.lua
+echo 'o.bind("SUPER + SHIFT + K", "Keycade LazyVim", "omarchy-shell shell summon gerritwanderer.keycade-lazyvim '\''{}'\''")' >> ~/.config/hypr/bindings.lua
 ```
 
 ## Updating
 
 ```bash
-omarchy plugin update luneth90.keycade
+omarchy plugin update gerritwanderer.keycade-lazyvim
 omarchy restart shell
 ```
 
@@ -68,7 +68,7 @@ omarchy restart shell
 
 - **Launch**: Press `Super + Shift + K`, or run:
   ```bash
-  omarchy-shell shell summon luneth90.keycade '{}'
+  omarchy-shell shell summon gerritwanderer.keycade-lazyvim '{}'
   ```
 - **Pick a Deck**: The home screen lists every deck — `all` first, then your declaration order — with live card counts and mastery. Select one, then press Enter to begin or resume.
 - **Curate**: Open `BROWSE` from the home or results screen to assign cards to a target deck; see [Decks](#decks) below.
@@ -77,7 +77,7 @@ omarchy restart shell
 - **Excluding Shortcuts**: Click `✕ EXCLUDE` during a card to remove it from every deck and from mastery counts. Re-enable excluded items anytime via the `EXCLUDED` panel without losing past accuracy stats.
 - **Exiting**: Release a bare `Esc` key to save and exit immediately. Chords involving Esc (`Super + Esc`, etc.) are treated as ordinary answers.
 
-User statistics and session data are stored under `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade/` and persist across updates; see [State and Migration](#state-and-migration).
+User statistics and session data are stored under `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade-lazyvim/` and persist across updates; see [State and Migration](#state-and-migration).
 
 ## Decks
 
@@ -87,7 +87,7 @@ Deck contents are computed live on every launch: `seed(corpus) ∪ added − rem
 
 ### Configuration
 
-Decks are declared in `${XDG_CONFIG_HOME:-~/.config}/omarchy/keycade/decks.json`. The file is **read-only** to Keycade — it is parsed statically, never written, and no Lua, card literals, or query language is involved:
+Decks are declared in `${XDG_CONFIG_HOME:-~/.config}/omarchy/keycade-lazyvim/decks.json`. The file is **read-only** to Keycade LazyVim — it is parsed statically, never written, and no Lua, card literals, or query language is involved:
 
 ```json
 {
@@ -107,7 +107,7 @@ Decks are declared in `${XDG_CONFIG_HOME:-~/.config}/omarchy/keycade/decks.json`
 - `id` is the stable state key and must match `^[a-z][a-z0-9-]{0,31}$`. Renaming `name` (up to 48 characters) keeps your curation; changing `id` creates a new deck.
 - `seed` is optional and closed-vocabulary: `categories`, `extras`, and `contexts` declared by the shipped pack. Only present dimensions participate, unioned when several are present, and a present but empty array matches nothing. Omitting `seed` entirely makes the deck manual-only — it starts empty and is filled from Browse — while an explicit empty `seed: {}` is unconstrained and matches every eligible card.
 - Declaring `id: "all"` only overrides its display name; any seed on it is ignored.
-- When the file is **absent**, the four starter decks are used. When **present**, it replaces the starters entirely. When **malformed**, Keycade falls back to `all`, shows the reason, and never blocks training. Invalid entries, unknown keys, and out-of-vocabulary values are skipped, counted, and surfaced.
+- When the file is **absent**, the four starter decks are used. When **present**, it replaces the starters entirely. When **malformed**, Keycade LazyVim falls back to `all`, shows the reason, and never blocks training. Invalid entries, unknown keys, and out-of-vocabulary values are skipped, counted, and surfaced.
 
 Custom mappings from `lua/config/keymaps.lua` (literal `vim.keymap.set` / `vim.keymap.del` lines) join the corpus under the `misc` category and can match `misc` or context seeds like any other card — or be hand-picked into any deck.
 
@@ -130,15 +130,27 @@ Curation state is capped at 24 KiB; an addition that would exceed the cap is ref
 
 ### State and Migration
 
-Keycade keeps exactly three state kinds — `settings.json`, `stats.json`, and `session.json` — under `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade/`. Updating from a pre-decks release migrates settings schema 3 → 4 and stats schema 4 → 5: all per-card recall history is preserved verbatim, including entries recorded under retired training grounds (retained but inert), and existing LazyVim run counters move to the `all` deck. A global run-identity sequence drives card history and scheduling, independently of the deck-visible run counts. Upgrading preserves every card record and deletes nothing, but no automatic rollback path is provided: older releases may reject the newer settings, stats or session schemas, quarantine those files, and start with fresh visible progress. Back up the state directory before downgrading and retain any quarantined files for recovery — automatic card-history or deck-counter compatibility with an older release is not promised.
+Keycade LazyVim keeps exactly three state kinds — `settings.json`, `stats.json`, and `session.json` — under `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade-lazyvim/`. Updating from a pre-decks release migrates settings schema 3 → 4 and stats schema 4 → 5: all per-card recall history is preserved verbatim, including entries recorded under retired training grounds (retained but inert), and existing LazyVim run counters move to the `all` deck. A global run-identity sequence drives card history and scheduling, independently of the deck-visible run counts. Upgrading preserves every card record and deletes nothing, but no automatic rollback path is provided: older releases may reject the newer settings, stats or session schemas, quarantine those files, and start with fresh visible progress. Back up the state directory before downgrading and retain any quarantined files for recovery — automatic card-history or deck-counter compatibility with an older release is not promised.
+
+#### Migrating from `luneth90.keycade`
+
+Keycade LazyVim publishes under a new plugin id, so Omarchy installs it beside the old plugin instead of upgrading it:
+
+```bash
+omarchy plugin add https://github.com/GerritWanderer/keycade-lazyvim.git --enable
+mv ~/.config/omarchy/keycade ~/.config/omarchy/keycade-lazyvim   # only if you declared decks
+omarchy plugin remove luneth90.keycade
+```
+
+The first launch adopts an existing `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade/` directory by renaming it, so every card record, run counter and saved session carries over untouched. If a `keycade-lazyvim` state directory already exists, the old one is left exactly as it is and never merged. Two further things are yours to move: rebind the Hyprland shortcut, which embeds the plugin id as both label and command, and update any `layerrule` matching the `keycade` layer-shell namespace — it is now `keycade-lazyvim`. An unmoved `decks.json` reads as absent, which means the shipped starter decks apply and nothing breaks.
 
 ## Uninstallation
 
 ```bash
-omarchy plugin remove luneth90.keycade
+omarchy plugin remove gerritwanderer.keycade-lazyvim
 ```
 
-Saved data remains preserved in `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade/`. Keycade intentionally does not ship destructive scripts that alter Hyprland configurations or erase user progress on uninstall.
+Saved data remains preserved in `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade-lazyvim/`. Keycade LazyVim intentionally does not ship destructive scripts that alter Hyprland configurations or erase user progress on uninstall.
 
 ## Development & Testing
 
@@ -168,4 +180,4 @@ The fuzz smoke test needs the pinned dev dependencies (`requirements-dev.txt`, e
 
 ## License
 
-Keycade is released under the [MIT License](LICENSE). Copyright © 2026 luneth90.
+Keycade LazyVim is released under the [MIT License](LICENSE). Copyright © 2026 luneth90.

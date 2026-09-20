@@ -9,7 +9,7 @@ This change narrows Keycade to LazyVim and replaces the fixed ground grid with u
 - **BREAKING**: The Omarchy, herdr, tmux, VIM and NEOVIM training grounds are removed. Only the LazyVim card supply remains.
 - **BREAKING**: The profile stops being the study scope. `Profiles.js` retains `lazyvim` as the card supply only; run scoping, run counters, the coverage cursor, progress and mastery move to the deck.
 - **BREAKING**: Keysym judging (`judgeMode: "keysym"`) is removed along with the physical-keycode matching path and the `libxkbcommon` dependency. LazyVim is text-judged, so only `judgeMode: "text"` survives.
-- **New**: Decks are declared in `~/.config/omarchy/keycade/decks.json`, read-only to the application. A deck has an id, a display name, and an optional seed.
+- **New**: Decks are declared in `~/.config/omarchy/keycade-lazyvim/decks.json`, read-only to the application. A deck has an id, a display name, and an optional seed.
 - **New**: A deck's contents are computed as `seed(corpus) ∪ added − removed`. The seed is evaluated live against the current corpus; only the user's explicit additions and removals are persisted.
 - **New**: A deck may be seeded from the pack's own `categories`, `extras` and `contexts` vocabularies. There is no query language, no glob and no free-text matching.
 - **New**: A browse-and-pick surface for assigning corpus cards to decks, plus a per-card gesture during a run.

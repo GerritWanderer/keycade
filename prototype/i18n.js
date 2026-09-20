@@ -6,7 +6,7 @@ window.KeycadeI18n = {
 
   messages: {
     en: {
-      pageTitle: "Keycade — 16-bit Shortcut Arcade",
+      pageTitle: "Keycade LazyVim — 16-bit Shortcut Arcade",
       brandSubtitle: "SHORTCUT RECALL ARCADE",
       playerOne: "[ PLAYER 1 ]",
       themeLabel: "Theme",
@@ -61,7 +61,7 @@ window.KeycadeI18n = {
     },
 
     "zh-CN": {
-      pageTitle: "Keycade — 16 位快捷键街机",
+      pageTitle: "Keycade LazyVim — 16 位快捷键街机",
       brandSubtitle: "快捷键记忆训练机",
       playerOne: "[ 玩家 1 ]",
       themeLabel: "主题",
@@ -116,7 +116,7 @@ window.KeycadeI18n = {
     },
 
     ja: {
-      pageTitle: "Keycade — 16ビット・ショートカットアーケード",
+      pageTitle: "Keycade LazyVim — 16ビット・ショートカットアーケード",
       tagline: "16ビット ショートカット訓練機",
       playerOne: "[ プレイヤー 1 ]",
       themeLabel: "テーマ",
@@ -171,7 +171,7 @@ window.KeycadeI18n = {
     },
 
     es: {
-      pageTitle: "Keycade — Arcade de atajos de 16 bits",
+      pageTitle: "Keycade LazyVim — Arcade de atajos de 16 bits",
       tagline: "ENTRENADOR DE ATAJOS 16-BIT",
       playerOne: "[ JUGADOR 1 ]",
       themeLabel: "Tema",

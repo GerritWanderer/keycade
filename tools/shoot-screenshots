@@ -27,14 +27,14 @@ shoot() {
   local theme=$1 locale=$2 view=$3 binding=$4 out=$5
   local root="$work/run"
   rm -rf -- "$root"
-  mkdir -p -- "$root/config" "$root/state/omarchy/keycade"
-  cp -r -- "$repo" "$root/config/keycade"
-  rm -rf -- "$root/config/keycade/.git"
+  mkdir -p -- "$root/config" "$root/state/omarchy/keycade-lazyvim"
+  cp -r -- "$repo" "$root/config/keycade-lazyvim"
+  rm -rf -- "$root/config/keycade-lazyvim/.git"
   cp -- "$repo/tools/screenshot-shell.qml" "$root/config/shell.qml"
-  [[ -f ~/.local/state/omarchy/keycade/stats.json ]] \
-    && cp -- ~/.local/state/omarchy/keycade/stats.json "$root/state/omarchy/keycade/stats.json"
+  [[ -f ~/.local/state/omarchy/keycade-lazyvim/stats.json ]] \
+    && cp -- ~/.local/state/omarchy/keycade-lazyvim/stats.json "$root/state/omarchy/keycade-lazyvim/stats.json"
   # The shell waits explicitly for StateStore readiness before loading LazyVim.
-  python3 - "$root/state/omarchy/keycade/settings.json" <<'PY'
+  python3 - "$root/state/omarchy/keycade-lazyvim/settings.json" <<'PY'
 import json, sys
 open(sys.argv[1], "w").write(json.dumps({
     "schemaVersion": 3, "locale": "en", "theme": "catppuccin",

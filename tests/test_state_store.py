@@ -26,7 +26,7 @@ class StateStoreHelperTests(unittest.TestCase):
 
     @property
     def state_dir(self):
-        return self.state_home / "omarchy" / "keycade"
+        return self.state_home / "omarchy" / "keycade-lazyvim"
 
     def run_helper(self, *arguments, payload=None, check=True, timeout=2):
         return subprocess.run(
@@ -132,10 +132,61 @@ class StateStoreHelperTests(unittest.TestCase):
         target = self.root / "target"
         target.mkdir()
         (self.state_home / "omarchy").mkdir(parents=True)
-        (self.state_home / "omarchy" / "keycade").symlink_to(target)
+        (self.state_home / "omarchy" / "keycade-lazyvim").symlink_to(target)
         result = self.run_helper("load", check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertEqual(list(target.iterdir()), [])
+
+    @property
+    def legacy_dir(self):
+        return self.state_home / "omarchy" / "keycade"
+
+    def seed_legacy(self, locale="en", mode=None):
+        """A pre-rename state directory, as the keycade release left it."""
+        self.legacy_dir.mkdir(parents=True)
+        (self.legacy_dir / "settings.json").write_text(
+            json.dumps({"schemaVersion": 4, "locale": locale}), encoding="utf-8")
+        if mode is not None:
+            self.legacy_dir.chmod(mode)
+
+    def test_legacy_directory_is_adopted_with_its_history(self):
+        self.seed_legacy(mode=0o755)
+        loaded = self.load()
+        self.assertEqual(json.loads(loaded["files"]["settings"]["text"])["locale"], "en")
+        self.assertFalse(self.legacy_dir.exists())
+        self.assertTrue((self.state_dir / "settings.json").exists())
+        # The adopted directory is held to the same privacy as a fresh one.
+        self.assertEqual(stat.S_IMODE(self.state_dir.stat().st_mode), 0o700)
+
+    def test_current_directory_wins_and_legacy_is_left_untouched(self):
+        self.seed_legacy(locale="en")
+        self.state_dir.mkdir(parents=True, mode=0o700)
+        (self.state_dir / "settings.json").write_text(
+            json.dumps({"schemaVersion": 4, "locale": "zh-CN"}), encoding="utf-8")
+        loaded = self.load()
+        self.assertEqual(json.loads(loaded["files"]["settings"]["text"])["locale"], "zh-CN")
+        # Never merged, never deleted: the user can still inspect the old one.
+        self.assertEqual(json.loads((self.legacy_dir / "settings.json").read_text())["locale"], "en")
+
+    def test_symlinked_legacy_directory_is_not_followed(self):
+        target = self.root / "elsewhere"
+        target.mkdir()
+        (target / "settings.json").write_text(
+            json.dumps({"schemaVersion": 4, "locale": "en"}), encoding="utf-8")
+        (self.state_home / "omarchy").mkdir(parents=True)
+        self.legacy_dir.symlink_to(target)
+        loaded = self.load()
+        self.assertEqual(loaded["files"]["settings"]["status"], "missing")
+        self.assertTrue(self.legacy_dir.is_symlink())
+        self.assertTrue((target / "settings.json").exists())
+
+    def test_legacy_name_that_is_not_a_directory_is_ignored(self):
+        (self.state_home / "omarchy").mkdir(parents=True)
+        self.legacy_dir.write_text("not a directory", encoding="utf-8")
+        loaded = self.load()
+        self.assertEqual(loaded["files"]["settings"]["status"], "missing")
+        self.assertEqual(self.legacy_dir.read_text(), "not a directory")
+        self.assertTrue(self.state_dir.is_dir())
 
     def test_oversized_stdin_is_rejected(self):
         result = self.run_helper(

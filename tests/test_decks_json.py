@@ -42,10 +42,10 @@ TERMINAL_CASES = [
 
 class DeckReaderTests(unittest.TestCase):
     def setUp(self):
-        temporary = tempfile.TemporaryDirectory(prefix="keycade-decks-test-")
+        temporary = tempfile.TemporaryDirectory(prefix="keycade-lazyvim-decks-test-")
         self.addCleanup(temporary.cleanup)
         self.home = Path(temporary.name)
-        self.files = helper.FILES["keycade"]["decks"]
+        self.files = helper.FILES["keycade-lazyvim"]["decks"]
         self.path = self.home / self.files[0]
         self.path.parent.mkdir(parents=True)
         environment = patch.dict(os.environ, {"XDG_CONFIG_HOME": ""})
@@ -243,7 +243,7 @@ class DeckReaderTests(unittest.TestCase):
     def test_xdg_absolute_root_and_missing_xdg_do_not_read_default_file(self):
         self.write([{"id": "default", "name": "Default"}])
         root = self.home / "xdg"
-        config = root / "omarchy/keycade/decks.json"
+        config = root / "omarchy/keycade-lazyvim/decks.json"
         config.parent.mkdir(parents=True)
         with patch.dict(os.environ, {"XDG_CONFIG_HOME": str(root)}):
             self.assertEqual(self.read()["status"], "absent")
@@ -328,7 +328,7 @@ class DeckReaderTests(unittest.TestCase):
             'vim.keymap.set("n", "<leader>zz", "noop", { desc = "Combined mapping" })')
         self.write([{"id": "loaded", "name": "\x1b7Launch\x1b#8", "seed": {"categories": ["lsp", "telepathy"]}}])
         xdg = self.home / "xdg"
-        deck_path = xdg / "omarchy/keycade/decks.json"
+        deck_path = xdg / "omarchy/keycade-lazyvim/decks.json"
         deck_path.parent.mkdir(parents=True)
         deck_path.write_bytes(self.path.read_bytes())
         runtime = self.home / "runtime"
@@ -463,7 +463,7 @@ Scope {
         self.assertLessEqual(len(found.stdout), helper.MAX_PAYLOAD_BYTES + 1)
         self.assertEqual(json.loads(found.stdout)["deckConfig"]["decks"][0]["name"], "名字😀")
         rejected = subprocess.run(["/usr/bin/python3", str(ROOT / "bin/app-config-json"),
-                                   "--profile", "keycade", "--home", str(self.home)],
+                                   "--profile", "keycade-lazyvim", "--home", str(self.home)],
                                   capture_output=True, timeout=5)
         self.assertNotEqual(rejected.returncode, 0)
 

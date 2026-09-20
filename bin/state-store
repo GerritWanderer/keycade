@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Bounded, descriptor-relative persistence for Keycade state."""
+"""Bounded, descriptor-relative persistence for Keycade LazyVim state."""
 
 from __future__ import annotations
 
@@ -50,6 +50,43 @@ def _open_child_directory(parent_fd: int, name: str, *, private: bool) -> int:
     return fd
 
 
+STATE_DIRECTORY = "keycade-lazyvim"
+LEGACY_STATE_DIRECTORY = "keycade"
+
+
+def _adopt_legacy_directory(parent_fd: int, legacy: str, name: str) -> None:
+    """Rename the pre-rename state directory into place, once.
+
+    Keycade published its state under omarchy/keycade before the LazyVim
+    rename. Adopting it by rename keeps every card record: a copy across three
+    files is not atomic and has to invent an answer for a half-finished move.
+
+    Both entries are inspected through the parent descriptor with
+    AT_SYMLINK_NOFOLLOW, so R3 holds and a symlink at either name aborts the
+    adoption rather than being followed. Anything unexpected -- the new
+    directory already there, no legacy directory, a foreign owner, a racing
+    instance -- leaves both entries untouched. Nothing is ever deleted.
+    """
+    try:
+        os.stat(name, dir_fd=parent_fd, follow_symlinks=False)
+        return
+    except FileNotFoundError:
+        pass
+    except OSError:
+        return
+    try:
+        info = os.stat(legacy, dir_fd=parent_fd, follow_symlinks=False)
+    except OSError:
+        return
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+        return
+    try:
+        os.rename(legacy, name, src_dir_fd=parent_fd, dst_dir_fd=parent_fd)
+        os.fsync(parent_fd)
+    except OSError:
+        return
+
+
 def open_state_directory() -> int:
     configured = os.environ.get("XDG_STATE_HOME", "")
     if configured and os.path.isabs(configured):
@@ -63,7 +100,8 @@ def open_state_directory() -> int:
     finally:
         os.close(root_fd)
     try:
-        return _open_child_directory(omarchy_fd, "keycade", private=True)
+        _adopt_legacy_directory(omarchy_fd, LEGACY_STATE_DIRECTORY, STATE_DIRECTORY)
+        return _open_child_directory(omarchy_fd, STATE_DIRECTORY, private=True)
     finally:
         os.close(omarchy_fd)
 

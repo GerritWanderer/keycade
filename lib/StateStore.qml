@@ -173,7 +173,7 @@ Item {
         root.stats = Stats.defaults()
         root.statsCorrupt = true
         root.enqueue({ action: "quarantine", kind: "stats" })
-        console.warn("Keycade stats were rejected and queued for quarantine")
+        console.warn("Keycade LazyVim stats were rejected and queued for quarantine")
       }
     }
     root.statsLoaded = true
@@ -207,7 +207,7 @@ Item {
         root.settings = root.defaultSettings()
         root.settingsCorrupt = true
         root.enqueue({ action: "quarantine", kind: "settings" })
-        console.warn("Keycade settings were rejected and queued for quarantine")
+        console.warn("Keycade LazyVim settings were rejected and queued for quarantine")
       }
     }
     root.settingsLoaded = true
@@ -234,7 +234,7 @@ Item {
       } catch (loadError) {
         root.sessionCorrupt = true
         root.enqueue({ action: "quarantine", kind: "session" })
-        console.warn("Keycade session was rejected and queued for quarantine")
+        console.warn("Keycade LazyVim session was rejected and queued for quarantine")
       }
     }
     root.sessionLoaded = true

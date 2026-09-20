@@ -1,6 +1,6 @@
 import QtQuick
 import Quickshell
-import "keycade" as Keycade
+import "keycade-lazyvim" as Keycade
 
 ShellRoot {
   Keycade.Keycade { id: overlay }

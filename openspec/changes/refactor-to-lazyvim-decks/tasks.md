@@ -11,7 +11,7 @@
 
 ## 2. Deck Configuration Reader and Hardening
 
-- [x] 2.1 Add `keycade` section with `.config/omarchy/keycade/decks.json` to `FILES` table in `bin/app-config-json`
+- [x] 2.1 Add `keycade-lazyvim` section with `.config/omarchy/keycade-lazyvim/decks.json` to `FILES` table in `bin/app-config-json`
 - [x] 2.2 Implement `read_decks(home, files)` in `bin/app-config-json` with R2 bounds checks (max 32 decks, ID regex `^[a-z][a-z0-9-]{0,31}$`, name <= 48 chars, closed seed vocabulary), verifying with dedicated unit tests
 - [x] 2.3 Add unit test suite `tests/test_decks_json.py` covering valid configs, missing files, malformed JSON, prototype pollution keys, duplicate and malformed ids, seed vocabulary rejections, and cap enforcement, verifying `python3 -m unittest discover -s tests -p "test_decks_json.py"` passes
 - [x] 2.4 Compile the four shipped starter decks (Navigation, LSP & Diagnostics, Search & Find, Git) with `nameKey` localisation records, verifying each seed category resolves against the LazyVim pack

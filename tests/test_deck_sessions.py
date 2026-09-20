@@ -54,7 +54,7 @@ class DeckSessionIntegrationTests(unittest.TestCase):
                         XDG_STATE_HOME=str(self.home / "state"), XDG_CACHE_HOME=str(self.home / "cache"),
                         XDG_DATA_HOME=str(self.home / "data"), QT_QPA_PLATFORMTHEME="", QT_STYLE_OVERRIDE="Fusion",
                         XDG_RUNTIME_DIR=str(runtime), QT_QPA_PLATFORM="offscreen")
-        config = self.home / "config/omarchy/keycade"
+        config = self.home / "config/omarchy/keycade-lazyvim"
         config.mkdir(parents=True)
         (config / "decks.json").write_text(json.dumps({"schemaVersion": 1, "decks": [
             {"id": "git", "name": "Git"}, {"id": "lsp", "name": "Shared"},
@@ -77,7 +77,7 @@ class DeckSessionIntegrationTests(unittest.TestCase):
                        input=json.dumps(value) + "\n", text=True, capture_output=True, check=True, timeout=5)
 
     def read_state(self, kind):
-        return json.loads((self.home / f"state/omarchy/keycade/{kind}.json").read_text())
+        return json.loads((self.home / f"state/omarchy/keycade-lazyvim/{kind}.json").read_text())
 
     def launch(self, body, ordering="config-first"):
         # Delay delivery, not validation. Both helpers still run against the
@@ -100,7 +100,7 @@ class DeckSessionIntegrationTests(unittest.TestCase):
     visible: root.opened
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    WlrLayershell.namespace: "keycade"
+    WlrLayershell.namespace: "keycade-lazyvim"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: guard.wantsFocus ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore'''

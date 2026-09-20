@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Keycade (`luneth90/keycade`) is a native Omarchy/Wayland desktop overlay for arcade-style LazyVim shortcut recall training with user-authored decks.
+Keycade LazyVim (`GerritWanderer/keycade-lazyvim`) is a native Omarchy/Wayland desktop overlay for arcade-style LazyVim shortcut recall training with user-authored decks.
 
 ---
 
@@ -30,8 +30,8 @@ qmllint Keycade.qml lib/*.qml
 
 ### Local Dev & Testing in Omarchy
 ```bash
-# Summon Keycade overlay locally
-omarchy-shell shell summon luneth90.keycade '{}'
+# Summon Keycade LazyVim overlay locally
+omarchy-shell shell summon gerritwanderer.keycade-lazyvim '{}'
 
 # Reload Quickshell after changes
 omarchy restart shell
@@ -43,7 +43,7 @@ omarchy restart shell
 
 - **Frontend**: `Keycade.qml` + `lib/` (Qt 6.8+ Quick / Controls 2 running in Quickshell).
 - **Card Supply**: the compiled LazyVim pack (`lib/Packs.js`), calibrated live by `bin/app-config-json` — `mapleader`/`maplocalleader`, enabled `lazyvim.json` extras, and literal `lua/config/keymaps.lua` overrides. LazyVim cards are text-sequence judged; there is no keysym path.
-- **Decks**: the study scope is a deck, not the card supply. `lib/Decks.js` computes each deck live as `seed(corpus) ∪ added − removed` from declarations in `~/.config/omarchy/keycade/decks.json` (read-only to the app) plus bounded membership deltas in settings. The reserved `all` deck holds every eligible card; absent config falls back to four shipped starters.
+- **Decks**: the study scope is a deck, not the card supply. `lib/Decks.js` computes each deck live as `seed(corpus) ∪ added − removed` from declarations in `~/.config/omarchy/keycade-lazyvim/decks.json` (read-only to the app) plus bounded membership deltas in settings. The reserved `all` deck holds every eligible card; absent config falls back to four shipped starters.
 - **Guard Preflight**: `bin/keybinds-json --guard-status` is a read-only `hyprctl` check that Hyprland allows keybind grabbing; `lib/InputGuard.qml` refuses to launch without it.
 - **Input Isolation**: `lib/InputGuard.qml` manages Wayland `ShortcutInhibitor` so keypresses never leak to desktop apps during training.
 - **State Storage**: `lib/StateStore.qml` & `bin/state-store` use descriptor-relative atomic writes (0600 temp files + fsync + atomic rename). Only `settings.json`, `stats.json` and `session.json` exist.

@@ -5,7 +5,7 @@ Defines user-authored and starter deck collections, managing declarative configu
 ## ADDED Requirements
 
 ### Requirement: Declarative Deck Configuration Reading
-The system SHALL read deck declarations from `~/.config/omarchy/keycade/decks.json` using descriptor-relative `O_NOFOLLOW` traversal and enforce dual-ended boundary limits.
+The system SHALL read deck declarations from `~/.config/omarchy/keycade-lazyvim/decks.json` using descriptor-relative `O_NOFOLLOW` traversal and enforce dual-ended boundary limits.
 
 #### Scenario: Successfully loading valid decks configuration
 - **WHEN** `decks.json` is present with `schemaVersion` 1 and three well-formed deck definitions

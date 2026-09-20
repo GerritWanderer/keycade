@@ -34,8 +34,8 @@ output=$(
 )
 grep -Fq -- "STATE_STORE_SMOKE_OK" <<<"$output"
 
-settings="$test_root/state/omarchy/keycade/settings.json"
-stats="$test_root/state/omarchy/keycade/stats.json"
+settings="$test_root/state/omarchy/keycade-lazyvim/settings.json"
+stats="$test_root/state/omarchy/keycade-lazyvim/stats.json"
 [[ -f $settings ]]
 [[ -f $stats ]]
 [[ $(stat -c '%a' "$settings") == 600 ]]

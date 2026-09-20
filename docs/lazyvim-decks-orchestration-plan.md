@@ -180,6 +180,6 @@ Cheap here: no build directory to duplicate, `__pycache__` is per-worktree, the 
 
 ### 8.5 Caveats
 
-- **Manual overlay launches** from different worktrees all read the same `~/.config/omarchy/keycade/` and the same state files, and fight over the same Wayland layer. Never have two agents manual-launch simultaneously (true in a shared checkout too) — interactive verification happens on the spine only.
+- **Manual overlay launches** from different worktrees all read the same `~/.config/omarchy/keycade-lazyvim/` and the same state files, and fight over the same Wayland layer. Never have two agents manual-launch simultaneously (true in a shared checkout too) — interactive verification happens on the spine only.
 - **Merging is the orchestrator's job**, at gate points only, never mid-package. Because the allowlists are disjoint, merges should be conflict-free by construction; a conflict means an allowlist was violated — which is itself a signal, not just an inconvenience.
 - **The Challenger needs no worktree** — it reviews diffs read-only from the orchestrator's checkout and cannot collide with either lane.

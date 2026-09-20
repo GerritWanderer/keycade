@@ -390,7 +390,7 @@ class GuardStatusTests(unittest.TestCase):
                 capture_output=True,
                 timeout=30,
                 env={"PATH": "/usr/bin",
-                     "HYPRLAND_INSTANCE_SIGNATURE": "keycade-test-no-such-instance",
+                     "HYPRLAND_INSTANCE_SIGNATURE": "keycade-lazyvim-test-no-such-instance",
                      "XDG_RUNTIME_DIR": runtime_dir},
             )
         self.assertEqual(result.returncode, 1)
@@ -425,7 +425,7 @@ class GuardStatusTests(unittest.TestCase):
         # behind a synthetic compositor socket.
         mock_path = ROOT / "tests" / "mocks" / "hyprctl"
         with tempfile.TemporaryDirectory() as runtime_dir:
-            instance = Path(runtime_dir) / "hypr" / "keycade-test-instance"
+            instance = Path(runtime_dir) / "hypr" / "keycade-lazyvim-test-instance"
             instance.mkdir(parents=True)
             listener = socket.socket(socket.AF_UNIX)
             try:
@@ -434,7 +434,7 @@ class GuardStatusTests(unittest.TestCase):
                     [str(mock_path), "-j", "getoption", "binds:disable_keybind_grabbing"],
                     capture_output=True, text=True, timeout=10, check=True,
                     env={"PATH": "/usr/bin", "XDG_RUNTIME_DIR": runtime_dir,
-                         "HYPRLAND_INSTANCE_SIGNATURE": "keycade-test-instance"},
+                         "HYPRLAND_INSTANCE_SIGNATURE": "keycade-lazyvim-test-instance"},
                 )
             finally:
                 listener.close()
@@ -458,7 +458,7 @@ class GuardStatusTests(unittest.TestCase):
             (["-j", "getoption", "binds:disable_keybind_grabbing"], minimal_env),
             (["-j", "getoption", "binds:disable_keybind_grabbing"],
              {"PATH": "/usr/bin", "XDG_RUNTIME_DIR": "/nonexistent",
-              "HYPRLAND_INSTANCE_SIGNATURE": "keycade-test-no-such-instance"}),
+              "HYPRLAND_INSTANCE_SIGNATURE": "keycade-lazyvim-test-no-such-instance"}),
         ]
         for argv, env in cases:
             with self.subTest(argv=argv, with_socket=env is not minimal_env):
@@ -484,7 +484,7 @@ class GuardStatusTests(unittest.TestCase):
                 capture_output=True,
                 timeout=30,
                 env={"PATH": "/usr/bin", "HOME": str(fake_home),
-                     "HYPRLAND_INSTANCE_SIGNATURE": "keycade-test-no-such-instance",
+                     "HYPRLAND_INSTANCE_SIGNATURE": "keycade-lazyvim-test-no-such-instance",
                      "XDG_RUNTIME_DIR": str(fake_home)},
             )
             self.assertFalse(sentinel.exists())

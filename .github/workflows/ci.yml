@@ -43,7 +43,7 @@ jobs:
       - name: Validate Plugin Manifest
         run: |
           jq -e '.schemaVersion == 1' manifest.json
-          jq -e '.id == "luneth90.keycade"' manifest.json
+          jq -e '.id == "gerritwanderer.keycade-lazyvim"' manifest.json
           jq -e '.version != null' manifest.json
           jq -e '(.kinds | length) > 0' manifest.json
           jq -e '.entryPoints.overlay == "Keycade.qml"' manifest.json

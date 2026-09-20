@@ -21,7 +21,7 @@ ShellRoot {
     visible: true
     anchors { top: true; bottom: true; left: true; right: true }
     color: "#080b14"
-    WlrLayershell.namespace: "keycade-input-probe"
+    WlrLayershell.namespace: "keycade-lazyvim-input-probe"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
     exclusionMode: ExclusionMode.Ignore
@@ -67,7 +67,7 @@ ShellRoot {
         anchors.fill: parent
         anchors.margins: 32
         spacing: 15
-        SafeText { text: "KEYCADE · INPUT PROBE"; color: "#7aa2f7"; font.family: "monospace"; font.pixelSize: 25; font.bold: true }
+        SafeText { text: "KEYCADE LAZYVIM · INPUT PROBE"; color: "#7aa2f7"; font.family: "monospace"; font.pixelSize: 25; font.bold: true }
         SafeText { text: "Exclusive focus: " + catcher.activeFocus; color: "#f1f4ff"; font.family: "monospace"; font.pixelSize: 16 }
         SafeText { text: "Inhibitor enabled: " + inhibitor.enabled; color: "#f1f4ff"; font.family: "monospace"; font.pixelSize: 16 }
         SafeText { text: "Inhibitor active: " + inhibitor.active; color: inhibitor.active ? "#9ece6a" : "#f7768e"; font.family: "monospace"; font.pixelSize: 16; font.bold: true }

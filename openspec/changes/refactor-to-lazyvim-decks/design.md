@@ -34,7 +34,7 @@ Constraints the design must satisfy: the overlay holds `WlrKeyboardFocus.Exclusi
 
 ### D1 — Decks are declared in config, membership is stored in state
 
-`decks.json` lives in `${XDG_CONFIG_HOME:-~/.config}/omarchy/keycade/`, is owned by the user and is never written by the application. Membership deltas live in the application-owned state directory.
+`decks.json` lives in `${XDG_CONFIG_HOME:-~/.config}/omarchy/keycade-lazyvim/`, is owned by the user and is never written by the application. Membership deltas live in the application-owned state directory.
 
 This follows the split the repository already enforces: `bin/app-config-json` reads user configuration and never writes; `bin/state-store` owns state and quarantines it when corrupt. A file written by both sides is where merge bugs live, and a user editing a `state-store`-managed file would fight its quarantine behaviour.
 

@@ -114,7 +114,7 @@ Scope {
             report = launch_reports[0]
             if relaunch:
                 report["relaunch"] = launch_reports[1]
-            state = home / "state/omarchy/keycade"
+            state = home / "state/omarchy/keycade-lazyvim"
             disk = {path.name: path.read_text(encoding="utf-8") for path in state.iterdir()}
             return report, disk
 

@@ -1,13 +1,13 @@
 # AGENTS.md
 
-Welcome to **Keycade** (`luneth90/keycade`). This document defines the foundational project context, system architecture, security invariants, and development lifecycle rules for autonomous AI coding agents and pair-programming assistants working on this repository.
+Welcome to **Keycade LazyVim** (`GerritWanderer/keycade-lazyvim`). This document defines the foundational project context, system architecture, security invariants, and development lifecycle rules for autonomous AI coding agents and pair-programming assistants working on this repository.
 
 ---
 
 ## 1. Project Overview
 
-- **Name**: Keycade
-- **Repository**: `https://github.com/luneth90/keycade`
+- **Name**: Keycade LazyVim
+- **Repository**: `https://github.com/GerritWanderer/keycade-lazyvim`
 - **License**: [MIT License](LICENSE)
 - **Primary Domain**: Native Wayland / Omarchy desktop overlay for arcade-style LazyVim shortcut recall training with user-authored decks.
 - **Core Stacks**:
@@ -21,7 +21,7 @@ Welcome to **Keycade** (`luneth90/keycade`). This document defines the foundatio
 ## 2. Directory Architecture
 
 ```
-keycade/
+keycade-lazyvim/
 ├── Keycade.qml                # Main QML application window and entry point
 ├── manifest.json              # Omarchy plugin manifest and metadata
 ├── bin/                       # Sandboxed runtime helpers (Python)
@@ -73,7 +73,7 @@ R1–R8 are non-negotiable security invariants established during the Omarchy ma
 
 ## 4. OpenSSF Compliance & Supply Chain Security
 
-Keycade maintains an **OpenSSF Scorecard score $\ge$ 7.5** and an **OpenSSF Best Practices Passing Badge (100%)**. Any modifications to CI/CD workflows or project metadata must preserve these guarantees:
+Keycade LazyVim maintains an **OpenSSF Scorecard score $\ge$ 7.5** and an **OpenSSF Best Practices Passing Badge (100%)**. Any modifications to CI/CD workflows or project metadata must preserve these guarantees:
 
 1. **Commit SHA Pinning**:
    - Every GitHub Action in `.github/workflows/*.yml` **MUST** be pinned to its full 40-character Git commit SHA, followed by a human-readable version comment (e.g., `uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2`).

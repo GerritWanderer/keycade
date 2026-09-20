@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - Unreleased
+
+### Renamed
+
+- **Plugin identity**: Keycade is now **Keycade LazyVim**, published as `gerritwanderer.keycade-lazyvim` from `GerritWanderer/keycade-lazyvim`. The name follows the scope: this release drills one card supply, LazyVim, rather than six applications. Omarchy treats a new id as a new plugin, so the previous installation is not upgraded in place.
+- **State directory**: `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade/` becomes `.../omarchy/keycade-lazyvim/`. The first launch adopts an existing directory by renaming it through the already-verified parent descriptor, preserving every card record, run counter and saved session. When both directories exist the new one wins and the old one is left untouched; nothing is ever merged or deleted.
+- **Deck configuration**: deck declarations move to `${XDG_CONFIG_HOME:-~/.config}/omarchy/keycade-lazyvim/decks.json`. This file is user-owned and never written by the application, so it is moved by hand; an unmoved file reads as absent and the shipped starter decks apply.
+- **Layer-shell namespace**: the Wayland surface is now `keycade-lazyvim`, so a `layerrule` matching `keycade` no longer applies.
+
+### Migration
+
+```bash
+omarchy plugin add https://github.com/GerritWanderer/keycade-lazyvim.git --enable
+mv ~/.config/omarchy/keycade ~/.config/omarchy/keycade-lazyvim   # only if you declared decks
+omarchy plugin remove luneth90.keycade
+```
+
+Rebind the Hyprland shortcut afterwards — the binding embeds the plugin id as both label and command.
+
 ## [1.0.1] - 2026-09-05
 
 ### Security & Hardening

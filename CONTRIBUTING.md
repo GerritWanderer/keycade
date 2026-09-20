@@ -1,6 +1,6 @@
-# Contributing to Keycade
+# Contributing to Keycade LazyVim
 
-Thank you for your interest in contributing to Keycade! Keycade is an arcade-style shortcut recall training platform designed for Omarchy and modern Wayland desktops.
+Thank you for your interest in contributing to Keycade LazyVim! Keycade LazyVim is an arcade-style shortcut recall training platform designed for Omarchy and modern Wayland desktops.
 
 ## Code of Conduct
 
@@ -9,9 +9,9 @@ We are committed to providing a welcoming, inclusive, and harassment-free enviro
 ## How to Contribute
 
 ### Reporting Bugs & Requesting Features
-- Please search existing [GitHub Issues](https://github.com/luneth90/keycade/issues) before opening a new one.
+- Please search existing [GitHub Issues](https://github.com/GerritWanderer/keycade-lazyvim/issues) before opening a new one.
 - For bug reports, please include your OS environment, compositor (e.g. Hyprland version), steps to reproduce, and any relevant logs or error traces.
-- For security vulnerabilities, please refer to our [Security Policy](https://github.com/luneth90/keycade/blob/main/SECURITY.md) and report via GitHub Private Vulnerability Reporting rather than public issues.
+- For security vulnerabilities, please refer to our [Security Policy](https://github.com/GerritWanderer/keycade-lazyvim/blob/main/SECURITY.md) and report via GitHub Private Vulnerability Reporting rather than public issues.
 
 ### Pull Requests
 1. Fork the repository and create your branch from `main`:
@@ -73,4 +73,4 @@ qmllint Keycade.qml lib/*.qml lib/sources/*.qml
 ```
 
 ## License
-By contributing to Keycade, you agree that your contributions will be licensed under the project's [MIT License](https://github.com/luneth90/keycade/blob/main/LICENSE).
+By contributing to Keycade LazyVim, you agree that your contributions will be licensed under the project's [MIT License](https://github.com/GerritWanderer/keycade-lazyvim/blob/main/LICENSE).
