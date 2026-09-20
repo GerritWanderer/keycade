@@ -76,6 +76,7 @@ SHELL = '''import QtQuick
 import QtQuick.Window
 import Quickshell
 import "app" as App
+import "app/lib/DeckValidation.js" as DeckValidation
 import "app/lib/Stats.js" as Stats
 
 Scope {
@@ -258,6 +259,7 @@ class DeckUiHarness(unittest.TestCase):
   property alias testStore: store
   property alias testGuard: guard
   property alias testI18n: i18n
+  property alias testAppConfig: appConfig
 """, 1)
         self.assertIn(PANEL, qml)
         qml = qml.replace(PANEL, '''  Item {
@@ -452,6 +454,44 @@ class DeckHomeUiTests(DeckUiHarness):
           overlay.leaveRun()
         '''.replace("__INVALID__", json.dumps(render_copy(EN, "deckConfigInvalid",
                                                           reason="invalid-json"))))
+
+    def test_first_summon_rereads_failed_cold_config(self):
+        # keepLoaded:true means the reader runs once at shell startup, long
+        # before the overlay is summoned. A cold load that settled as a failure
+        # used to be reused for that whole first summon, so the declared decks
+        # stayed invisible until the overlay was dismissed and summoned again.
+        self.write_decks([{"id": "zz-first", "name": "Zed First", "seed": {"categories": ["git"]}},
+                          {"id": "picked", "name": "Picked"},
+                          {"id": "full", "name": "Full House", "seed": {"categories": ["lsp"]}}])
+        self.write_state("settings", {"schemaVersion": 4, "activeDeck": "all", "locale": "en",
+                                      "feedbackSound": False, "countdownSound": False,
+                                      "excludedBindings": [], "deckCards": {}})
+        self.write_state("stats", {"schemaVersion": 5, "runSequence": 40, "bindings": {}, "decks": {}})
+        self.launch('''
+          if (test.step === 0) {
+            test.check(overlay.deckDefinitions.length === 4, "declared decks plus all")
+            test.data = { baseline: overlay.deckDefinitions.length }
+            // Exactly what a settled-but-failed cold read leaves behind.
+            overlay.testAppConfig.deckConfig = DeckValidation.invalid("invalid-transport")
+            overlay.applyDetectedConfig()
+            test.step = 1
+            test.later()
+            return
+          }
+          if (test.step === 1) {
+            test.check(overlay.deckDefinitions.length === 1, "failed cold read leaves only all")
+            test.check(overlay.deckConfigReason === "invalid-transport", "rejection surfaced")
+            test.check(!overlay.configOpened, "still the first summon")
+            overlay.open("{}")
+            test.step = 2
+            test.later()
+            return
+          }
+          test.check(overlay.deckDefinitions.length === test.data.baseline,
+                     "first summon re-read the declarations: " + overlay.deckDefinitions.length)
+          test.check(overlay.deckConfigReason === "", "rejection cleared: " + overlay.deckConfigReason)
+          test.check(test.byName(overlay, "deckConfigNote").visible === false, "note withdrawn")
+        ''')
 
     def render_user_config(self, path):
         decks = [{"id": "zz-first", "name": "Zed First", "seed": {"categories": ["git"]}},

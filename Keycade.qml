@@ -192,7 +192,11 @@ Item {
     guard.begin()
     // The cold-load reader was already requested before state readiness;
     // reuse that result/launch rather than deadlock or launch a second helper.
-    if (root.configOpened || (!appConfig.loading && !appConfig.settled)) root.loadActiveGround()
+    // A settled cold load that failed is not a result worth reusing: the whole
+    // first summon would keep a transport/config rejection the next one heals
+    // on its own, so it is re-read here instead.
+    if (root.configOpened || (!appConfig.loading && !appConfig.settled)
+        || appConfig.deckConfig.status === "invalid") root.loadActiveGround()
     root.configOpened = true
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
