@@ -7,7 +7,6 @@
 [![CI](https://github.com/GerritWanderer/keycade-lazyvim/actions/workflows/ci.yml/badge.svg)](https://github.com/GerritWanderer/keycade-lazyvim/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/GerritWanderer/keycade-lazyvim/actions/workflows/codeql.yml/badge.svg)](https://github.com/GerritWanderer/keycade-lazyvim/actions/workflows/codeql.yml)
 [![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/GerritWanderer/keycade-lazyvim/badge)](https://scorecard.dev/viewer/?uri=github.com/GerritWanderer/keycade-lazyvim)
-[![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14452/badge)](https://www.bestpractices.dev/projects/14452)
 [![codecov](https://codecov.io/gh/GerritWanderer/keycade-lazyvim/branch/main/graph/badge.svg)](https://codecov.io/gh/GerritWanderer/keycade-lazyvim)
 [![Omarchy Marketplace](https://img.shields.io/badge/Omarchy%20Marketplace-listed-2ea44f?logo=omarchy)](https://plugins.omarchy.org/plugin.html?id=gerritwanderer.keycade-lazyvim)
 [![GitHub Release](https://img.shields.io/github/v/release/GerritWanderer/keycade-lazyvim?logo=github)](https://github.com/GerritWanderer/keycade-lazyvim/releases)
@@ -180,4 +179,4 @@ python3 tests/fuzz_keybinds.py -runs=1000
 
 ## 开源协议
 
-Keycade LazyVim 采用 [MIT 许可证](LICENSE) 发布。Copyright © 2026 luneth90。
+Keycade LazyVim 采用 [MIT 许可证](LICENSE) 发布。Copyright © 2026 luneth90 与 © 2026 GerritWanderer。

@@ -14,7 +14,7 @@ Welcome to **Keycade LazyVim** (`GerritWanderer/keycade-lazyvim`). This document
   - **Frontend / UI**: QML (Qt 6.8+ / Quick / Controls 2), running within [Quickshell](https://quickshell.outfoxxed.me/) (`Quickshell.Wayland._ShortcutsInhibitor`).
   - **Backend / Runtime Helpers**: Python 3.12+ scripts located in `bin/` (`keybinds-json`, `app-config-json`, `state-store`, `bounded-relay`).
   - **System Integration**: Linux `prctl(PR_SET_PDEATHSIG)`, `hyprctl` (read-only query mode).
-  - **Security & Quality**: OpenSSF Scorecard (Target $\ge$ 7.5), OpenSSF Best Practices (Passing Badge), CodeQL SAST, Dependabot, Atheris fuzz testing.
+  - **Security & Quality**: OpenSSF Scorecard (Target $\ge$ 7.5), CodeQL SAST, Dependabot, Atheris fuzz testing.
 
 ---
 
@@ -73,7 +73,7 @@ R1–R8 are non-negotiable security invariants established during the Omarchy ma
 
 ## 4. OpenSSF Compliance & Supply Chain Security
 
-Keycade LazyVim maintains an **OpenSSF Scorecard score $\ge$ 7.5** and an **OpenSSF Best Practices Passing Badge (100%)**. Any modifications to CI/CD workflows or project metadata must preserve these guarantees:
+Keycade LazyVim maintains an **OpenSSF Scorecard score $\ge$ 7.5**. Any modifications to CI/CD workflows or project metadata must preserve that guarantee:
 
 1. **Commit SHA Pinning**:
    - Every GitHub Action in `.github/workflows/*.yml` **MUST** be pinned to its full 40-character Git commit SHA, followed by a human-readable version comment (e.g., `uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2`).
@@ -89,7 +89,7 @@ Keycade LazyVim maintains an **OpenSSF Scorecard score $\ge$ 7.5** and an **Open
 4. **Fuzzing Integrity**:
    - Keep `tests/fuzz_keybinds.py` functional and containing `import atheris` to maintain the Scorecard `Fuzzing: 10/10` check.
 5. **Best Practices Sync**:
-   - Updates to project metadata or licenses must be reflected in `.bestpractices.json`.
+   - `.bestpractices.json` holds the criteria responses submitted for the retired badge and is kept for reference. It is not re-synced, and no badge depends on it.
 
 ---
 
