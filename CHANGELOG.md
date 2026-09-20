@@ -5,7 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.0.0] - Unreleased
+## [2.0.1] - 2026-09-20
+
+### Documentation
+
+- **Copyright**: `LICENSE` and both READMEs now carry `GerritWanderer`'s notice beside `luneth90`'s. MIT requires the original notice to survive in every copy, so this is added, not replaced.
+- **Security policy**: supported versions move to 2.0.x, with a note on where a 1.0-only finding belongs; the reporting checklist names the helpers, QML consumers and Wayland input path that exist today instead of retired IPC socket handlers; disclosure routes through GitHub private reporting and the maintainer's profile rather than a published personal address.
+- **OpenSSF Best Practices badge**: removed from both READMEs. It pointed at a project registered against the repository this one was renamed from, so it claimed something this repository has not earned. `.bestpractices.json` is kept as the record of what was submitted. Scorecard, CodeQL, Dependabot and the Atheris fuzz gate are unchanged.
+
+No code, schema or packaging changes: state, decks, binding ids and the plugin id behave exactly as in 2.0.0.
+
+## [2.0.0] - 2026-09-20
 
 ### Renamed
 

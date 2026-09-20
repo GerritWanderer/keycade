@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "gerritwanderer.keycade-lazyvim",
   "name": "Keycade LazyVim",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "gerritwanderer",
   "description": "An arcade-style LazyVim shortcut recall trainer for Omarchy (Wayland) \u2014 your own decks, each with its own progress and mastery.",
   "kinds": [

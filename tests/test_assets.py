@@ -121,7 +121,7 @@ class AssetTests(unittest.TestCase):
         # version bump, entry-point or lifecycle change in this package.
         self.assertEqual(manifest["schemaVersion"], 1)
         self.assertEqual(manifest["id"], "gerritwanderer.keycade-lazyvim")
-        self.assertEqual(manifest["version"], "2.0.0")
+        self.assertEqual(manifest["version"], "2.0.1")
         self.assertEqual(manifest["kinds"], ["overlay"])
         self.assertEqual(manifest["entryPoints"], {"overlay": "Keycade.qml"})
         self.assertIs(manifest["keepLoaded"], True)
