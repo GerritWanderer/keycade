@@ -2,6 +2,8 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import "../Profiles.js" as Profiles
+import "../Packs.js" as Packs
+import "../DeckValidation.js" as DeckValidation
 
 // What a training ground's own configuration says about itself: which key
 // every other binding hangs off, which opt-in bundles are on, which upstream
@@ -25,7 +27,7 @@ Item {
   readonly property string helperPath: String(Qt.resolvedUrl("../../bin/app-config-json")).replace("file://", "")
   readonly property int relayMaxBytes: 512 * 1024
   readonly property real relayDeadline: 3.0
-  readonly property int maxRecordChars: 256 * 1024
+  readonly property int maxPayloadBytes: 256 * 1024
   readonly property int maxExtras: 128
   readonly property int maxBindings: 128
   readonly property int maxOptionChars: 32
@@ -34,12 +36,17 @@ Item {
 
   // What the machine said. Empty until a read succeeds, and empty again if it
   // fails - a stale answer from another ground would be worse than none.
-  property var options: ({})
+  property var options: Object.create(null)
   property var extras: []
   // Literal top-level vim.keymap.set/del calls, still in source order. The
   // pack loader applies them over the shipped LazyVim table.
   property var bindings: []
   property int bindingSkipped: 0
+  // A fresh consumer-owned result, not a retained helper object. The later
+  // engine chooses starters for absent, all-only for invalid, and replaces
+  // starters for valid (including an empty list). No deck evaluation here.
+  property var deckConfig: DeckValidation.invalid("not-loaded")
+  property var inputState: DeckValidation.newStream()
   // Why a value is missing, by name: "never assigned" means the upstream
   // default applies and nothing needs attention, anything else means the
   // reader should look.
@@ -53,18 +60,20 @@ Item {
   signal finished()
 
   function reset() {
-    root.options = ({})
+    root.options = Object.create(null)
     root.extras = []
     root.bindings = []
     root.bindingSkipped = 0
+    root.deckConfig = DeckValidation.invalid("not-loaded")
+    root.inputState = DeckValidation.newStream()
     root.skipped = Object.create(null)
     root.settled = false
   }
 
-  // A ground with nothing to read is answered immediately: only the ones whose
-  // configuration this helper knows the shape of are asked.
+  // A ground with nothing to read is answered immediately: only the ground
+  // whose configuration this helper knows the shape of is asked.
   function readable() {
-    return root.profileId === "lazyvim" || root.profileId === "tmux"
+    return root.profileId === "lazyvim"
   }
 
   function refresh() {
@@ -99,8 +108,11 @@ Item {
   // Bounded again on this side. The helper checks its own output; that it did
   // is not something this side can verify.
   function accept(record) {
+    // Even direct callers must pass the same envelope and aggregate byte cap.
+    if (!DeckValidation.validEnvelope(record, root.profileId, root.maxPayloadBytes)) return false
+    var deckConfig = DeckValidation.validate(record.deckConfig, Packs.pack("lazyvim"), Profiles.contexts("lazyvim"))
     var declared = Object.keys(Profiles.options(root.profileId))
-    var options = ({})
+    var options = Object.create(null)
     var source = record.options && typeof record.options === "object"
         && !Array.isArray(record.options) ? record.options : ({})
     for (var index = 0; index < declared.length; index++) {
@@ -177,10 +189,39 @@ Item {
     root.bindings = bindings
     root.bindingSkipped = bindingSkipped + rejectedBindings
     root.skipped = skipped
+    root.deckConfig = deckConfig
+    return true
+  }
+
+  function rejectTransport() {
+    root.options = Object.create(null)
+    root.extras = []
+    root.bindings = []
+    root.bindingSkipped = 0
+    root.skipped = Object.create(null)
+    root.deckConfig = DeckValidation.invalid("invalid-transport")
+    DeckValidation.rejectStream(root.inputState)
+    if (reader.running) reader.signal(15)
+  }
+
+  function consume(chunk) {
+    if (root.settled || root.inputState.rejected) return
+    // Check aggregate bytes BEFORE retaining a chunk (R2/R8). The helper emits
+    // ASCII JSON escapes so a UTF-8 code point cannot straddle Qt chunks.
+    var record = DeckValidation.consumeStream(root.inputState, chunk, root.maxPayloadBytes)
+    if (root.inputState.rejected) { root.rejectTransport(); return }
+    try {
+      if (record !== null && !root.accept(record)) root.rejectTransport()
+    } catch (error) {
+      // Malformed calibration fields must not prevent the deck fallback (or
+      // training) just because a hostile value cannot be converted to text.
+      root.rejectTransport()
+    }
   }
 
   function settle() {
     if (root.settled) return
+    if (!DeckValidation.completeStream(root.inputState)) root.rejectTransport()
     root.settled = true
     root.loading = false
     readTimeout.stop()
@@ -196,25 +237,14 @@ Item {
       "--", root.interpreterPath, root.helperPath, "--profile", root.profileId
     ]
     clearEnvironment: true
-    // Only what the helper needs to find the home it reads under.
-    Component.onCompleted: reader.environment = ({ "PATH": "/usr/bin", "HOME": Quickshell.env("HOME") || "" })
+    // Fixed whitelist only; the helper validates the absolute XDG anchor and
+    // descriptor-traverses it without following links. No ambient interpreter
+    // or module-search environment is forwarded.
+    Component.onCompleted: reader.environment = ({ "PATH": "/usr/bin", "HOME": Quickshell.env("HOME") || "",
+                                                   "XDG_CONFIG_HOME": Quickshell.env("XDG_CONFIG_HOME") || "" })
     stdout: SplitParser {
-      splitMarker: "\n"
-      onRead: function(line) {
-        if (root.settled) return
-        try {
-          var text = String(line || "")
-          if (!text.trim().length || text.length > root.maxRecordChars) return
-          var record = JSON.parse(text)
-          if (!record || typeof record !== "object" || Array.isArray(record)) return
-          if (record.schemaVersion !== 1 || record.type === "error") return
-          if (record.profile !== root.profileId) return
-          root.accept(record)
-        } catch (error) {
-          // Reading nothing is a normal outcome; the defaults cover it.
-          console.warn("Keycade could not read the ground's configuration: " + error)
-        }
-      }
+      splitMarker: ""
+      onRead: function(chunk) { root.consume(chunk) }
     }
     onExited: {
       if (root.pending) {

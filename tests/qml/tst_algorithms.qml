@@ -9,15 +9,10 @@ import "../../lib/TextKey.js" as TextKey
 import "../../lib/Scheduler.js" as Scheduler
 import "../../lib/Stats.js" as Stats
 import "../../lib/Session.js" as Session
-import "../../lib/sources/hyprland/Eligibility.js" as Eligibility
-import "../../lib/sources/hyprland/Categorizer.js" as Categorizer
-import "../../lib/sources/hyprland/ActionLocalizer.js" as Actions
 import "../../lib/DotFont.js" as DotFont
 import "../../lib/Palettes.js" as Palettes
-import "../fixtures/canonical-keys.js" as CanonicalKeys
 import "../fixtures/text-keys.js" as TextKeys
 import "../../lib/sources/pack/Eligibility.js" as PackEligibility
-import "../../lib/sources/ExternalPackValidation.js" as ExternalPack
 import "../../lib/Packs.js" as Packs
 
 TestCase {
@@ -52,184 +47,21 @@ TestCase {
     return base
   }
 
-  function test_logicalAndPhysicalMatching() {
-    verify(Normalizer.matches(binding({}), { modMask: 64, logicalKey: "3", physicalCode: 12 }))
-    verify(!Normalizer.matches(binding({}), { modMask: 65, logicalKey: "3", physicalCode: 12 }))
-    verify(Normalizer.matches(binding({ key: "", keycode: 12, matchMode: "physical" }),
-                              { modMask: 64, logicalKey: "4", physicalCode: 12 }))
-  }
-
-  // A German QWERTZ layout: the key that types "," unshifted types ";" with
-  // Shift, which is what Qt reports and what the old matcher compared.
-  function germanMap() {
-    var map = Object.create(null)
-    map[","] = [59]
-    map["-"] = [20]
-    return map
-  }
-
-  // The keycode map is indexed by the producer's canonical_key() and looked
-  // up with canonicalKey() here. Two implementations of one normalisation
-  // drift, and a drift costs the binding rather than merely displaying it
-  // oddly, so the same corpus holds both sides.
-  function test_canonicalKeyAgreesWithTheProducerCorpus() {
-    var pairs = CanonicalKeys.pairs
-    verify(pairs.length > 20)
-    for (var i = 0; i < pairs.length; i++) {
-      var canonical = pairs[i][1]
-      // The producer's output reaches QML as binding.key and is canonicalised
-      // again on the way to the lookup, so it has to survive that unchanged.
-      compare(Normalizer.canonicalKey(canonical), canonical,
-              "producer output " + JSON.stringify(canonical) + " is not stable here")
-    }
-  }
-
-  function test_lowerCaseLetterBindingsResolveToTheSameKey() {
-    compare(Normalizer.canonicalKey("q"), "Q")
-    var map = Object.create(null)
-    map["Q"] = [24]
-    var lower = binding({ key: "Q", description: "Close window" })
-    verify(Normalizer.matches(lower, { modMask: 64, logicalKey: "Q", physicalCode: 24 },
-                              { keycodeMap: map }))
-    compare(Eligibility.reason(lower, { keymapAuthoritative: true, keycodeMap: map }), "")
-  }
-
-  function test_keymapJudgesByKeycodeNotByProducedCharacter() {
-    var comma = binding({ modMask: 65, key: ",", description: "Dismiss all notifications" })
-    var pressed = { modMask: 65, logicalKey: ";", physicalCode: 59 }
-    // What issue #1 reported: correct key, judged wrong.
-    verify(!Normalizer.matches(comma, pressed))
-    verify(Normalizer.matches(comma, pressed, { keycodeMap: germanMap() }))
-  }
-
-  function test_keymapRejectsAnotherKeyOnTheSameCharacter() {
-    var comma = binding({ modMask: 65, key: ",", description: "Dismiss all notifications" })
-    verify(!Normalizer.matches(comma, { modMask: 65, logicalKey: ",", physicalCode: 94 },
-                               { keycodeMap: germanMap() }))
-  }
-
-  function test_keymapSeparatesTheKeypadFromTheMainRow() {
-    // kc82 is KP_Subtract and kc20 is minus, but Qt reports Key_Minus for both.
-    var minus = binding({ key: "-", description: "Shrink window" })
-    var keypad = { modMask: 64, logicalKey: "-", physicalCode: 82 }
-    verify(Normalizer.matches(minus, keypad))
-    verify(!Normalizer.matches(minus, keypad, { keycodeMap: germanMap() }))
-    verify(Normalizer.matches(minus, { modMask: 64, logicalKey: "-", physicalCode: 20 },
-                              { keycodeMap: germanMap() }))
-  }
-
-  function test_keyAbsentFromTheKeymapMatchesNothing() {
-    // No base-level key produces slash on this layout, so Hyprland would not
-    // fire the bind either.
-    var slash = binding({ modMask: 65, key: "/", description: "Passwords" })
-    verify(Normalizer.matches(slash, { modMask: 65, logicalKey: "/", physicalCode: 15 }))
-    verify(!Normalizer.matches(slash, { modMask: 65, logicalKey: "/", physicalCode: 15 },
-                               { keycodeMap: germanMap() }))
-  }
-
-  function test_eventWithoutAKeycodeStillFallsBackToTheCharacter() {
-    var comma = binding({ key: "," })
-    verify(Normalizer.matches(comma, { modMask: 64, logicalKey: ",", physicalCode: 0 },
-                              { keycodeMap: germanMap() }))
-  }
-
-  function test_keymapNeverOverridesTheModifierComparison() {
-    var comma = binding({ modMask: 65, key: "," })
-    verify(!Normalizer.matches(comma, { modMask: 64, logicalKey: ";", physicalCode: 59 },
-                               { keycodeMap: germanMap() }))
-  }
-
-  function test_unreachableBindingsAreExcludedOnlyWhenTheKeymapIsKnown() {
-    var reachable = binding({ key: ",", description: "Dismiss last notification" })
-    var unreachable = binding({ key: "/", description: "Passwords" })
-    // code: binds carry the layout-independent fallback label for the keycode.
-    var physical = binding({ key: "3", keycode: 12, matchMode: "physical",
-                             description: "Switch to workspace 3" })
-    var options = { keymapAuthoritative: true, keycodeMap: germanMap() }
-
-    compare(Eligibility.reason(unreachable, options), "unreachable-on-layout")
-    compare(Eligibility.reason(reachable, options), "")
-    // A code: bind names its keycode directly and is unaffected.
-    compare(Eligibility.reason(physical, options), "")
-    // Without a confirmed keymap the rule does not apply.
-    compare(Eligibility.reason(unreachable, {}), "")
-
-    var result = Eligibility.filter([reachable, unreachable], options)
-    compare(result.eligible.length, 1)
-    compare(result.eligible[0].key, ",")
-  }
-
-  // The one-way union still lives in the normaliser, but no eligible binding
-  // reaches it any more: DELETE is a device-special key, so a DELETE bind is
-  // rejected before it can ever become a card. The assertions stay to pin the
-  // normaliser's own contract until the union itself is removed.
-  function test_appleDeleteAcceptsBackspaceOneWay() {
-    var deleteBinding = binding({ key: "DELETE", description: "Close all windows" })
-    var backspaceInput = { modMask: 64, logicalKey: "BACKSPACE", physicalCode: 22 }
-    verify(!Normalizer.matches(deleteBinding, backspaceInput))
-    verify(Normalizer.matches(deleteBinding, backspaceInput, { appleKeyboard: true }))
-
-    var backspaceBinding = binding({ key: "BACKSPACE", description: "Toggle window transparency" })
-    var deleteInput = { modMask: 64, logicalKey: "DELETE", physicalCode: 119 }
-    verify(!Normalizer.matches(backspaceBinding, deleteInput, { appleKeyboard: true }))
-  }
-
-  // Excluding DELETE changes what the ambiguity scan sees. On an Apple
-  // keyboard the union used to collapse SUPER+DELETE and SUPER+BACKSPACE onto
-  // one chord and drop both as ambiguous; with DELETE rejected earlier, the
-  // BACKSPACE bind is alone on its chord and becomes trainable. That is the
-  // correct answer for that hardware, where the key sends BackSpace.
-  function test_excludingDeleteFreesTheAppleBackspaceBind() {
-    var deleteBinding = binding({ key: "DELETE", description: "Close all windows" })
-    var backspaceBinding = binding({ key: "BACKSPACE", description: "Toggle window transparency" })
-
-    var result = Eligibility.filter([deleteBinding, backspaceBinding], { appleKeyboard: true })
-    compare(result.eligible.length, 1)
-    compare(result.eligible[0].key, "BACKSPACE")
-    compare(result.excluded.length, 0)
-    compare(Eligibility.reason(deleteBinding), "device-special-key")
-  }
-
-  function test_userExcludedBindingsLeaveTheEligibleSet() {
-    var kept = binding({ key: "1", arg: "1", description: "Switch to workspace 1" })
-    var dropped = binding({ key: "2", arg: "2", description: "Switch to workspace 2" })
-    var droppedId = Normalizer.bindingId(dropped)
-
-    var result = Eligibility.filter([kept, dropped], {
-      excludedBindings: ["hyprland:" + droppedId]
-    })
-    compare(result.eligible.length, 1)
-    compare(result.eligible[0].key, "1")
-    compare(result.excluded.length, 1)
-    compare(result.excluded[0].reason, "user-excluded")
-    compare(result.excluded[0].binding.key, "2")
-
-    // Another profile's entries are not consumed here.
-    var other = Eligibility.filter([kept, dropped], {
-      excludedBindings: ["lazyvim:" + droppedId]
-    })
-    compare(other.eligible.length, 2)
-  }
-
-  // Excluding one bind must not change which chords count as ambiguous, or the
-  // exclusion would silently readmit whatever shared the chord.
-  function test_userExclusionDoesNotDisturbAmbiguousChords() {
-    var first = binding({ key: "4", arg: "4", description: "Switch to workspace 4" })
-    var second = binding({ key: "4", arg: "5", description: "Switch to workspace 5" })
-    var third = binding({ key: "6", arg: "6", description: "Switch to workspace 6" })
-
-    var before = Eligibility.filter([first, second, third], {})
-    compare(before.eligible.length, 1)
-    compare(before.eligible[0].key, "6")
-
-    var after = Eligibility.filter([first, second, third], {
-      excludedBindings: ["hyprland:" + Normalizer.bindingId(first)]
-    })
-    compare(after.eligible.length, 1)
-    compare(after.eligible[0].key, "6")
-    compare(after.excluded.length, 2)
-    compare(after.excluded[0].reason, "ambiguous-chord")
-    compare(after.excluded[1].reason, "ambiguous-chord")
+  function test_inputFilterKeepsModifiersSeparateFromTextJudging() {
+    compare(Normalizer.modifierMask(0), 0)
+    compare(Normalizer.modifierMask(qtShift), 1)
+    compare(Normalizer.modifierMask(qtCtrl), 4)
+    compare(Normalizer.modifierMask(qtAlt), 8)
+    compare(Normalizer.modifierMask(qtSuper), 64)
+    compare(Normalizer.modifierMask(qtShift | qtCtrl | qtAlt | qtSuper), 77)
+    compare(Normalizer.modifierMask(0x20000000), 0) // Keypad is not a held modifier.
+    for (var key = 0x01000020; key <= 0x01000023; key++)
+      verify(Normalizer.isModifier(key))
+    verify(!Normalizer.isModifier(Qt.Key_Escape))
+    verify(!Normalizer.isModifier(Qt.Key_G))
+    verify(!Normalizer.isModifier(Qt.Key_Space))
+    verify(!Normalizer.isModifier(0))
+    verify(!Normalizer.isModifier(undefined))
   }
 
   function test_excludedListIsBoundedOnBothAxes() {
@@ -271,6 +103,25 @@ TestCase {
     compare(Session.withoutExclusion(list, "hyprland", "64|K|workspace|1").length, 0)
     compare(Session.withoutExclusion(list, "hyprland", "64|K|missing|1").length, 1)
     compare(Session.withoutExclusion(list, "lazyvim", "64|K|workspace|1").length, 1)
+  }
+
+  function test_foreignExclusionsRemainRetainedAndInert() {
+    var foreign = ["hyprland", "herdr", "tmux", "vim", "neovim", "future-supply"]
+    var values = ["lazyvim:normal/<leader>ff"]
+    for (var index = 0; index < foreign.length; index++)
+      values.push(foreign[index] + ":normal/a:b/c")
+    compare(JSON.stringify(Session.excludedList(values)), JSON.stringify(values))
+    var active = Session.excludedSet(values, Profiles.defaultId())
+    compare(Object.getPrototypeOf(active), null)
+    compare(Object.keys(active).join(","), "normal/<leader>ff")
+    // Curation of a current exclusion never clears another namespace.
+    var removed = Session.withoutExclusion(values, "lazyvim", "normal/<leader>ff")
+    compare(JSON.stringify(removed), JSON.stringify(values.slice(1)))
+    var restored = Session.withExclusion(removed, "lazyvim", "normal/<leader>ff")
+    compare(restored.length, values.length)
+    for (var second = 0; second < foreign.length; second++)
+      verify(Session.excludedSet(restored, foreign[second])["normal/a:b/c"])
+    compare(Session.excludedList(["constructor:x", "prototype:x", "__proto__:x"]).length, 0)
   }
 
   // The HUD draws these cells itself, so a row wider than five bits or a
@@ -320,187 +171,6 @@ TestCase {
     verify(Palettes.supported(Palettes.defaultName()))
     compare(Palettes.palette("no-such-theme"), Palettes.palette(Palettes.defaultName()))
     compare(Palettes.palette("__proto__"), Palettes.palette(Palettes.defaultName()))
-  }
-
-  function test_tabAndBacktabNormalization() {
-    var tab = Normalizer.normalizeEvent({
-      key: 0x01000001,
-      text: "\t",
-      modifiers: 0x08000000,
-      nativeScanCode: 23,
-      isAutoRepeat: false
-    })
-    compare(tab.logicalKey, "TAB")
-    compare(tab.modMask, 8)
-    verify(Normalizer.matches(binding({
-      modMask: 8,
-      key: "TAB",
-      dispatcher: "movefocus",
-      arg: "next",
-      description: "Focus on next window"
-    }), tab))
-
-    var backtab = Normalizer.normalizeEvent({
-      key: 0x01000002,
-      text: "",
-      modifiers: 0x0a000000,
-      nativeScanCode: 23,
-      isAutoRepeat: false
-    })
-    compare(backtab.logicalKey, "TAB")
-    compare(backtab.modMask, 9)
-    verify(Normalizer.matches(binding({
-      modMask: 9,
-      key: "TAB",
-      dispatcher: "movefocus",
-      arg: "previous",
-      description: "Focus on previous window"
-    }), backtab))
-
-    var macbookUnknownTab = Normalizer.normalizeEvent({
-      key: 0x01ffffff,
-      text: "\t",
-      modifiers: 0x10000000,
-      nativeScanCode: 23,
-      isAutoRepeat: false
-    })
-    compare(macbookUnknownTab.logicalKey, "TAB")
-    compare(macbookUnknownTab.modMask, 64)
-    verify(Normalizer.matches(binding({
-      modMask: 64,
-      key: "TAB",
-      dispatcher: "workspace",
-      arg: "m+1",
-      description: "Next workspace"
-    }), macbookUnknownTab))
-
-    var macbookUnknownBacktab = Normalizer.normalizeEvent({
-      key: 0x01ffffff,
-      text: "",
-      modifiers: 0x12000000,
-      nativeScanCode: 23,
-      isAutoRepeat: false
-    })
-    compare(macbookUnknownBacktab.logicalKey, "TAB")
-    compare(macbookUnknownBacktab.modMask, 65)
-    verify(Normalizer.matches(binding({
-      modMask: 65,
-      key: "TAB",
-      dispatcher: "workspace",
-      arg: "m-1",
-      description: "Previous workspace"
-    }), macbookUnknownBacktab))
-
-    compare(Normalizer.logicalKey({
-      key: 0,
-      text: "",
-      nativeScanCode: 15
-    }), "TAB")
-  }
-
-  function test_specialKeyNormalization() {
-    compare(Normalizer.logicalKey({ key: 0x01000003 }), "BACKSPACE")
-    compare(Normalizer.logicalKey({ key: 0x01000007 }), "DELETE")
-    compare(Normalizer.logicalKey({ key: 0x0100003b }), "F12")
-    compare(Normalizer.logicalKey({ key: 0x01000072 }), "XF86AUDIORAISEVOLUME")
-    compare(Normalizer.logicalKey({ key: 0x010000b3 }), "XF86MONBRIGHTNESSDOWN")
-  }
-
-  function test_shiftedSymbolsNormalizeToBaseKeys() {
-    var slash = Normalizer.normalizeEvent({
-      key: 0x3f,
-      text: "?",
-      modifiers: 0x12000000,
-      nativeScanCode: 61,
-      isAutoRepeat: false
-    })
-    compare(slash.logicalKey, "/")
-    compare(slash.modMask, 65)
-    verify(Normalizer.matches(binding({
-      modMask: 65,
-      key: "/",
-      dispatcher: "exec",
-      arg: "passwords",
-      description: "Passwords"
-    }), slash))
-
-    compare(Normalizer.logicalKey({ key: 0x2b, text: "+", modifiers: 0x02000000 }), "=")
-    compare(Normalizer.logicalKey({ key: 0x3a, text: ":", modifiers: 0x02000000 }), ";")
-    compare(Normalizer.logicalKey({ key: 0x3f, text: "?", modifiers: 0 }), "?")
-  }
-
-  function test_spaceNormalization() {
-    var space = Normalizer.normalizeEvent({
-      key: 0x20,
-      text: " ",
-      modifiers: 0x14000000,
-      nativeScanCode: 65,
-      isAutoRepeat: false
-    })
-    compare(space.logicalKey, "SPACE")
-    compare(space.modMask, 68)
-    compare(Normalizer.canonicalKey(" "), "SPACE")
-    verify(Normalizer.matches(binding({
-      modMask: 68,
-      key: "SPACE",
-      dispatcher: "exec",
-      arg: "background-switcher",
-      description: "Background switcher"
-    }), space))
-  }
-
-  function test_builtinShortcutCategories() {
-    compare(Categorizer.category(binding({ description: "Close window", dispatcher: "__lua" })), "windows")
-    compare(Categorizer.category(binding({ description: "Switch to workspace 3", dispatcher: "__lua" })), "workspaces")
-    compare(Categorizer.category(binding({ description: "Lock system", dispatcher: "__lua" })), "system")
-    compare(Categorizer.category(binding({ description: "Brightness up", dispatcher: "__lua" })), "system")
-    compare(Categorizer.category(binding({ description: "Browser", dispatcher: "__lua" })), "applications")
-    compare(Categorizer.category(binding({ description: "Volume up", dispatcher: "__lua" })), "media")
-    compare(Categorizer.category(binding({ description: "Screenshot Region", dispatcher: "__lua" })), "capture")
-    compare(Categorizer.category(binding({ description: "Clipboard manager", dispatcher: "__lua" })), "utilities")
-  }
-
-  function test_eligibilityRejectsAmbiguousAndBypassingBindings() {
-    var duplicate = binding({ description: "Another action" })
-    var result = Eligibility.filter([binding({}), duplicate], {})
-    compare(result.eligible.length, 0)
-    compare(result.excluded.length, 2)
-
-    result = Eligibility.filter([binding({ dontInhibit: true })], {})
-    compare(result.eligible.length, 0)
-
-    result = Eligibility.filter([
-      binding({ key: "L", description: "Lock system", dispatcher: "__lua" }),
-      binding({ key: "B", description: "Browser", dispatcher: "__lua" })
-    ], {})
-    compare(result.eligible.length, 2)
-    compare(result.eligible[0].category, "system")
-    compare(result.eligible[1].category, "applications")
-  }
-
-  function test_eligibilityRejectsDeviceSpecialKeys() {
-    var specialBindings = [
-      binding({ key: "F1", description: "Help" }),
-      binding({ key: "F12", description: "Screenshot Display" }),
-      binding({ key: "XF86AUDIORAISEVOLUME", modMask: 0, description: "Volume up" }),
-      binding({ key: "XF86MONBRIGHTNESSDOWN", modMask: 0, description: "Brightness down" }),
-      binding({ key: "PRINT", description: "Screenshot" }),
-      binding({ key: "HOME", description: "Save window width" }),
-      binding({ key: "END", description: "Go to end" }),
-      binding({ key: "INSERT", description: "Insert mode" }),
-      binding({ key: "PAGEUP", description: "Page up" }),
-      binding({ key: "PAGEDOWN", description: "Page down" }),
-      binding({ key: "DELETE", description: "Close all windows" }),
-      binding({ key: "", keycode: 201, matchMode: "physical", description: "Hardware menu" })
-    ]
-    for (var i = 0; i < specialBindings.length; i++) {
-      compare(Eligibility.reason(specialBindings[i]), "device-special-key")
-    }
-
-    compare(Eligibility.reason(binding({ key: "TAB", description: "Next workspace" })), "")
-    // Arrow keys stay trainable: the compact boards that keep a navigation key
-    // at all keep these, and 60% users reach them through a layer.
-    compare(Eligibility.reason(binding({ key: "LEFT", description: "Focus left window" })), "")
   }
 
   function test_guidedInputDoesNotAffectFirstTryWindow() {
@@ -598,7 +268,7 @@ TestCase {
     compare(Stats.addTrainingTime(stats, "hyprland", 654321), 654321)
     compare(Stats.addTrainingTime(stats, "hyprland", -10), 654321)
     var migrated = Stats.migrate(stats)
-    compare(migrated.schemaVersion, 4)
+    compare(migrated.schemaVersion, 5)
     var migratedCounters = Stats.counters(migrated, "hyprland")
     compare(migratedCounters.totalTrainingMs, 654321)
     compare(migratedCounters.firstMasteryAt, 12345)
@@ -624,11 +294,11 @@ TestCase {
     // Reading never creates a record: activeRunId is a binding on the stats
     // object, and a read that wrote would mutate state from inside a binding.
     compare(Stats.counters(stats, "tmux").runs, 0)
-    compare(stats.profiles["tmux"], undefined)
-    // A name outside the profile character set is refused outright.
+    compare(stats.decks["tmux"], undefined)
+    // A name outside the deck character set is refused outright.
     compare(Stats.completeRun(stats, "__proto__"), 1)
-    compare(stats.profiles["__proto__"], undefined)
-    compare(Object.keys(stats.profiles).length, 2)
+    compare(stats.decks["__proto__"], undefined)
+    compare(Object.keys(stats.decks).length, 2)
   }
 
   function test_qualifiedIdsCarryTheirProfileAndKeepTheLocalPart() {
@@ -647,26 +317,32 @@ TestCase {
     compare(Profiles.qualifyLegacy("hyprland/64|K|exec|x"), "hyprland/64|K|exec|x")
     compare(Profiles.qualify("Hyprland", "x"), "")
     compare(Profiles.qualify("__proto__", "x"), "")
-    verify(Profiles.known("hyprland"))
-    verify(Profiles.known("lazyvim"))
-    verify(Profiles.known("tmux"))
-    verify(!Profiles.known("lazygit"))
-    // A ground either reads the machine or carries a table; the two take
-    // different sources and judge answers differently.
-    verify(!Profiles.isPack("hyprland"))
-    verify(Profiles.isPack("lazyvim"))
-    verify(Profiles.isPack("tmux"))
+    compare(Profiles.qualify("constructor", "x"), "")
+    compare(Profiles.qualify("prototype", "x"), "")
+    // Retired and not-yet-known namespaces are syntactically valid history,
+    // not registered supplies. D10 must never depend on known().
+    var foreign = ["hyprland", "herdr", "tmux", "vim", "neovim", "lazygit"]
+    for (var index = 0; index < foreign.length; index++) {
+      var id = foreign[index]
+      verify(Profiles.valid(id))
+      verify(!Profiles.known(id))
+      verify(!Profiles.isPack(id))
+      compare(Profiles.qualify(id, "normal/a/b"), id + "/normal/a/b")
+      compare(Profiles.profileOf(id + "/normal/a/b"), id)
+      compare(Profiles.localOf(id + "/normal/a/b"), "normal/a/b")
+      compare(Profiles.qualifyLegacy(id + "/normal/a/b"), id + "/normal/a/b")
+    }
   }
 
-  // The eligible model carries both: the local id is what an exclusion names
-  // and must stay byte for byte what it was, the qualified one is what the
-  // scheduler and stats key on.
-  function test_eligibleBindingsCarryBothIdForms() {
-    var item = binding({ key: "7", arg: "7", description: "Switch to workspace 7" })
-    var result = Eligibility.filter([item], {})
-    compare(result.eligible.length, 1)
-    compare(result.eligible[0].localId, Normalizer.bindingId(item))
-    compare(result.eligible[0].id, "hyprland/" + Normalizer.bindingId(item))
+  function test_lazyvimIsTheOnlySupplyAndDefault() {
+    compare(Profiles.ids().join(","), "lazyvim")
+    compare(Profiles.defaultId(), "lazyvim")
+    verify(Profiles.known("lazyvim"))
+    verify(Profiles.isPack("lazyvim"))
+    compare(Profiles.profile("lazyvim").judgeMode, "text")
+    compare(Profiles.profile("lazyvim").answerModel, "sequence")
+    compare(Profiles.contexts("lazyvim").join(","), "normal,visual,insert,operator")
+    compare(Profiles.optionNames("lazyvim").join(","), "leader,localleader")
   }
 
   function test_v1StatsMigrateWithoutInventingMastery() {
@@ -688,9 +364,9 @@ TestCase {
         }
       }
     })
-    compare(migrated.schemaVersion, 4)
+    compare(migrated.schemaVersion, 5)
     var counters = Stats.counters(migrated, "hyprland")
-    compare(counters.runs, 9)
+    compare(counters.runs, 0) // retired counters never become all's progress
     compare(counters.totalTrainingMs, 0)
     compare(counters.firstMasteryAt, 0)
     verify(!counters.firstMasteryCelebrated)
@@ -700,6 +376,8 @@ TestCase {
     compare(migrated.bindings["hyprland/one"].firstTryCorrect, 1)
     compare(migrated.bindings["hyprland/one"].successfulRuns.length, 0)
     compare(migrated.bindings.one, undefined)
+    compare(migrated.bindings["lazyvim/one"], undefined)
+    compare(Object.keys(migrated.decks).length, 0)
   }
 
   function test_v2StatsPreserveProgressAndGainMilestoneDefaults() {
@@ -720,12 +398,14 @@ TestCase {
         }
       }
     })
-    compare(migrated.schemaVersion, 4)
+    compare(migrated.schemaVersion, 5)
     var counters = Stats.counters(migrated, "hyprland")
-    compare(counters.runs, 12)
-    compare(counters.coverageCursor, 8)
+    compare(counters.runs, 0)
+    compare(counters.coverageCursor, 0)
     compare(migrated.bindings["hyprland/one"].state, "mastered")
     compare(migrated.bindings["hyprland/one"].firstTryCorrect, 5)
+    compare(migrated.bindings["lazyvim/one"], undefined)
+    compare(Object.keys(migrated.decks).length, 0)
     compare(counters.totalTrainingMs, 0)
     compare(counters.firstMasteryAt, 0)
     compare(counters.firstMasteryRun, 0)
@@ -759,14 +439,15 @@ TestCase {
         }
       }
     })
-    compare(migrated.schemaVersion, 4)
+    compare(migrated.schemaVersion, 5)
     var counters = Stats.counters(migrated, "hyprland")
-    compare(counters.runs, 12)
-    compare(counters.coverageCursor, 8)
-    compare(counters.totalTrainingMs, 654321)
-    compare(counters.firstMasteryAt, 12345)
-    compare(counters.firstMasteryRun, 7)
-    verify(counters.firstMasteryCelebrated)
+    compare(counters.runs, 0)
+    compare(counters.coverageCursor, 0)
+    compare(counters.totalTrainingMs, 0)
+    compare(counters.firstMasteryAt, 0)
+    compare(counters.firstMasteryRun, 0)
+    verify(!counters.firstMasteryCelebrated)
+    compare(Object.keys(migrated.decks).length, 0)
 
     var entry = migrated.bindings["hyprland/" + localId]
     compare(Profiles.localOf("hyprland/" + localId), localId)
@@ -778,10 +459,12 @@ TestCase {
 
     // Migrating the result again is a no-op rather than a second prefix.
     var again = Stats.migrate(migrated)
-    compare(again.schemaVersion, 4)
-    compare(Stats.counters(again, "hyprland").runs, 12)
+    compare(again.schemaVersion, 5)
+    compare(Stats.counters(again, "hyprland").runs, 0)
     compare(again.bindings["hyprland/" + localId].firstTryCorrect, 5)
     compare(again.bindings["hyprland/hyprland/" + localId], undefined)
+    compare(again.bindings["lazyvim/" + localId], undefined)
+    compare(again.decks.all, undefined)
   }
 
   // The longest id a source can mint still migrates: the local part is bounded
@@ -802,46 +485,58 @@ TestCase {
     compare(sanitized.cards[0].bindingId, "hyprland/" + localId)
   }
 
-  // A v4 entry naming no readable ground cannot be loaded by any profile, so
-  // it is dropped rather than guessed at.
-  // The cabinet row shows every ground's standing, and only the ground you are
-  // standing at can be counted: the other two read the machine through a
-  // subprocess, and a pack's eligible set turns on exclusions and on which
-  // extras are switched on. So each ground records what it counted, and a
-  // ground that has never been opened has to stay a dash rather than become a
-  // zero that looks like "nothing mastered here".
-  function test_aGroundRecordsWhatItCountedForTheCabinetsToRead() {
-    var stats = Stats.migrate({ schemaVersion: 4, bindings: {}, profiles: {} })
-    compare(Stats.counters(stats, "tmux").knownTotal, 0)
-    compare(Stats.counters(stats, "tmux").knownMastered, 0)
+  // Progress is now derived from the current corpus rather than stale counts
+  // recorded by a ground. Excluding a card changes only that denominator.
+  function test_progressIsComputedWithoutPersistingKnownTotals() {
+    var stats = Stats.migrate({ schemaVersion: 4,
+      bindings: { "lazyvim/one": { state: "mastered" }, "lazyvim/two": { state: "learning" } },
+      profiles: { lazyvim: { runs: 3, knownTotal: 10, knownMastered: 99 } } })
+    var both = Stats.counts(stats, [{ id: "lazyvim/one" }, { id: "lazyvim/two" }], 1, 4)
+    compare(both.total, 2)
+    compare(both.mastered, 1)
+    var filtered = Stats.counts(stats, [{ id: "lazyvim/one" }], 1, 4)
+    compare(filtered.total, 1)
+    compare(filtered.mastered, 1)
+    compare(Stats.counts(stats, [], 1, 4).total, 0)
+    compare(Stats.counters(stats, "all").runs, 3)
+    compare(Stats.counters(stats, "all").knownTotal, undefined)
+    compare(Stats.counters(stats, "all").knownMastered, undefined)
+    var saved = Stats.migrate(stats)
+    compare(saved.decks.all.knownTotal, undefined)
+    compare(saved.bindings["lazyvim/two"].state, "learning")
+  }
 
-    compare(Stats.noteProgress(stats, "tmux", 7, 86), true)
-    compare(Stats.counters(stats, "tmux").knownMastered, 7)
-    compare(Stats.counters(stats, "tmux").knownTotal, 86)
-    // Nothing moved, so nothing is written: the file is not rewritten to say
-    // the same thing again.
-    compare(Stats.noteProgress(stats, "tmux", 7, 86), false)
-    compare(Stats.noteProgress(stats, "tmux", 8, 86), true)
-
-    // One ground's standing is not another's.
-    compare(Stats.counters(stats, "vim").knownTotal, 0)
-    Stats.noteProgress(stats, "vim", 2, 109)
-    compare(Stats.counters(stats, "tmux").knownTotal, 86)
-    compare(Stats.counters(stats, "vim").knownTotal, 109)
-
-    // A hand-edited file cannot claim more mastered than it counted.
-    var edited = Stats.migrate({
-      schemaVersion: 4, bindings: {},
-      profiles: { tmux: { knownTotal: 10, knownMastered: 99 } }
-    })
-    compare(Stats.counters(edited, "tmux").knownMastered, 10)
-
-    // And a file written before this existed reads as "never opened".
-    var older = Stats.migrate({
-      schemaVersion: 4, bindings: {}, profiles: { tmux: { runs: 3 } }
-    })
-    compare(Stats.counters(older, "tmux").runs, 3)
-    compare(Stats.counters(older, "tmux").knownTotal, 0)
+  function test_foreignHistorySurvivesWithoutContributingToLazyvim() {
+    var foreign = ["hyprland", "herdr", "tmux", "vim", "neovim", "future-supply"]
+    var source = Stats.defaults()
+    for (var index = 0; index < foreign.length; index++) {
+      var name = foreign[index]
+      var id = name + "/normal/a:b/c"
+      Stats.recordGuided(source, id, 1, 100)
+      Stats.recordFirstTry(source, id, true, 500, 1, 200)
+      Stats.completeRun(source, name)
+    }
+    var before = JSON.stringify(source)
+    var migrated = Stats.parse(before)
+    compare(JSON.stringify(migrated), before)
+    compare(Object.getPrototypeOf(migrated.bindings), null)
+    compare(Object.getPrototypeOf(migrated.decks), null)
+    compare(Stats.runsOf(migrated, "lazyvim"), 0)
+    var active = [{ id: "lazyvim/normal/a:b/c" }]
+    compare(Stats.aggregate(migrated, active).attempts, 0)
+    compare(Stats.counts(migrated, active, 300, 1).mastered, 0)
+    for (var second = 0; second < foreign.length; second++) {
+      var savedId = foreign[second] + "/normal/a:b/c"
+      compare(JSON.stringify(migrated.bindings[savedId]), JSON.stringify(source.bindings[savedId]))
+      var session = Session.sanitize({ schemaVersion: 1, profileId: foreign[second], runId: 1,
+        currentBindingId: savedId, cards: [{ bindingId: savedId, tier: "learning", queue: "due" }],
+        pendingReinforcements: [savedId], runResults: {} })
+      compare(session.profileId, foreign[second])
+      compare(session.currentBindingId, savedId)
+      compare(session.cards[0].bindingId, savedId)
+      compare(session.pendingReinforcements[0], savedId)
+      verify(!Session.canResume(session, 1, active, 24, "lazyvim"))
+    }
   }
 
   function test_v4StatsDropEntriesWithNoTrainingGround() {
@@ -850,10 +545,10 @@ TestCase {
       profiles: { hyprland: { runs: 3 }, "__proto__": { runs: 9 }, "Nope": { runs: 9 } },
       bindings: { "hyprland/kept": { state: "learning" }, "orphan": { state: "learning" } }
     })
-    compare(Stats.counters(migrated, "hyprland").runs, 3)
-    compare(migrated.profiles["__proto__"], undefined)
-    compare(migrated.profiles["Nope"], undefined)
-    compare(Object.keys(migrated.profiles).length, 1)
+    compare(Stats.counters(migrated, "hyprland").runs, 0)
+    compare(migrated.decks["__proto__"], undefined)
+    compare(migrated.decks["Nope"], undefined)
+    compare(Object.keys(migrated.decks).length, 0)
     compare(migrated.bindings["hyprland/kept"].state, "learning")
     compare(migrated.bindings["orphan"], undefined)
   }
@@ -863,25 +558,25 @@ TestCase {
     var migrated = Stats.migrate(source)
     compare(migrated.bindings["__proto__"], undefined)
     compare(migrated.bindings["hyprland/__proto__"], undefined)
-    compare(Stats.counters(migrated, "hyprland").runs, 1000000000)
+    compare(Object.keys(migrated.decks).length, 0)
     compare(migrated.bindings["hyprland/safe"].firstTryAttempts, 1000000000)
     compare(migrated.bindings["hyprland/safe"].firstTryCorrect, 1000000000)
   }
 
-  function test_schedulerSpreadsRepeatedBindingsAndAvoidsAdjacentRepeats() {
+  function test_schedulerSmallDeckDealsEachBindingExactlyOnce() {
     var bindings = []
     for (var index = 0; index < 8; index++) {
       var item = binding({ key: String(index), arg: String(index), description: "Switch to workspace " + index })
-      item.id = Profiles.qualify("hyprland", Normalizer.bindingId(item))
+      item.id = Profiles.qualify("lazyvim", "scheduler/" + index)
       bindings.push(item)
     }
     var deck = Scheduler.build(bindings, Stats.defaults(), 24)
-    compare(deck.length, 24)
+    compare(deck.length, 8)
     for (var i = 1; i < deck.length; i++) verify(deck[i].binding.id !== deck[i - 1].binding.id)
     var counts = {}
     for (var j = 0; j < deck.length; j++)
       counts[deck[j].binding.id] = Number(counts[deck[j].binding.id] || 0) + 1
-    for (var id in counts) compare(counts[id], 3)
+    for (var id in counts) compare(counts[id], 1)
   }
 
   function test_schedulerBalancesCategoriesAcrossTheRun() {
@@ -895,7 +590,7 @@ TestCase {
           description: categories[categoryIndex] + " " + itemIndex
         })
         item.category = categories[categoryIndex]
-        item.id = Profiles.qualify("hyprland", Normalizer.bindingId(item))
+        item.id = Profiles.qualify("lazyvim", "scheduler/" + categoryIndex + "/" + itemIndex)
         bindings.push(item)
       }
     }
@@ -937,12 +632,12 @@ TestCase {
 
     var seen = {}
     for (var run = 1; run <= 5; run++) {
-      var deck = Scheduler.build(bindings, stats, 24, { now: now, runId: run })
+      var deck = Scheduler.build(bindings, stats, 24, { now: now, runId: run, deckId: "coverage" })
       var unseenCards = deck.filter(function(card) { return card.queue === "unseen" })
       compare(unseenCards.length, 6)
       unseenCards.forEach(function(card) {
         seen[card.binding.id] = true
-        Scheduler.markCovered(bindings, stats, card.binding.id)
+        Scheduler.markCovered(bindings, stats, card.binding.id, "coverage")
         Stats.recordGuided(stats, card.binding.id, run, now)
         stats.bindings[card.binding.id].dueRun = 99
       })
@@ -959,9 +654,10 @@ TestCase {
       bindings.push(item)
     }
     var deck = Scheduler.build(bindings, stats, 8, { now: 100, runId: 1 })
+    compare(Stats.counters(stats, "coverage").coverageCursor, 0)
+    Scheduler.markCovered(bindings, stats, deck[0].binding.id, "coverage")
+    verify(Stats.counters(stats, "coverage").coverageCursor !== 0)
     compare(Stats.counters(stats, "hyprland").coverageCursor, 0)
-    Scheduler.markCovered(bindings, stats, deck[0].binding.id)
-    verify(Stats.counters(stats, "hyprland").coverageCursor !== 0)
   }
 
   function test_schedulerPrioritizesDueBeforeMaintenance() {
@@ -1051,36 +747,35 @@ TestCase {
 
   function test_savedSessionRestoresRemainingCardsAndCorrection() {
     var first = binding({ key: "1", arg: "1", description: "First" })
-    first.id = "hyprland/first"
+    first.id = "lazyvim/first"
     var second = binding({ key: "2", arg: "2", description: "Second" })
-    second.id = "hyprland/second"
+    second.id = "lazyvim/second"
     var deck = [
       { binding: first, tier: "learning", queue: "due", remedial: false },
       { binding: second, tier: "learning", queue: "remedial", remedial: true }
     ]
     var cards = Session.cardsFrom(deck, 1)
     compare(cards.length, 1)
-    compare(cards[0].bindingId, "hyprland/second")
+    compare(cards[0].bindingId, "lazyvim/second")
     verify(cards[0].remedial)
     var saved = {
-      schemaVersion: 1, profileId: "hyprland", runId: 4, cards: cards, correctionRequired: true
+      schemaVersion: 1, profileId: "lazyvim", runId: 4, cards: cards, correctionRequired: true
     }
-    verify(Session.canResume(saved, 4, [first, second], 24, "hyprland"))
-    verify(!Session.canResume(saved, 5, [first, second], 24, "hyprland"))
-    // A run belongs to the ground it was played on.
+    verify(Session.canResume(saved, 4, [first, second], 24, "all"))
+    verify(!Session.canResume(saved, 5, [first, second], 24, "all"))
+    // A legacy LazyVim run maps only to all, not any similarly named deck.
     verify(!Session.canResume(saved, 4, [first, second], 24, "lazyvim"))
     saved.offset = 24
-    verify(!Session.canResume(saved, 4, [first, second], 24, "hyprland"))
+    verify(!Session.canResume(saved, 4, [first, second], 24, "all"))
     var restored = Session.restoreCards(cards, [first, second])
     compare(restored.length, 1)
-    compare(restored[0].binding.id, "hyprland/second")
+    compare(restored[0].binding.id, "lazyvim/second")
     verify(restored[0].remedial)
   }
 
-  // A run interrupted before training grounds existed still resumes after the
-  // upgrade: its ids name no ground, and everything stored back then was
-  // played on the default one.
-  function test_sessionsSavedBeforeProfilesStillResume() {
+  // Pre-profile sessions keep their historical namespace, but cannot resume
+  // into a user deck named after that retired ground.
+  function test_sessionsSavedBeforeProfilesRemainInert() {
     var first = binding({ key: "1", arg: "1", description: "First" })
     first.id = "hyprland/first"
     var sanitized = Session.sanitize({
@@ -1092,12 +787,15 @@ TestCase {
       pendingReinforcements: ["first"],
       runResults: { "first": { misses: 2, reactions: [800] } }
     })
+    compare(Profiles.defaultId(), "lazyvim")
     compare(sanitized.profileId, "hyprland")
     compare(sanitized.cards[0].bindingId, "hyprland/first")
     compare(sanitized.currentBindingId, "hyprland/first")
     compare(sanitized.pendingReinforcements[0], "hyprland/first")
     compare(sanitized.runResults["hyprland/first"].misses, 2)
-    verify(Session.canResume(sanitized, 4, [first], 24, "hyprland"))
+    verify(!Session.canResume(sanitized, 4, [first], 24, "hyprland"))
+    verify(!Session.canResume(sanitized, 4, [first], 24, "lazyvim"))
+    compare(sanitized.runResults["lazyvim/first"], undefined)
 
     // Sanitising twice must not prefix twice.
     var again = Session.sanitize(sanitized)
@@ -1168,8 +866,8 @@ TestCase {
     var state = AnswerMatcher.begin()
     var verdict = ""
     for (var index = 0; index < steps.length; index++)
-      verdict = AnswerMatcher.advance(state, answer, textEvent(steps[index]), {})
-    return { verdict: verdict, cursor: state.cursor }
+      verdict = AnswerMatcher.advance(state, answer, textEvent(steps[index]))
+    return { verdict: verdict, cursor: AnswerMatcher.typedSteps(state) }
   }
 
   // The producer writes these steps into a pack; the consumer judges presses
@@ -1253,11 +951,11 @@ TestCase {
     var steps = [{ mods: 0, text: "g" }, { mods: 0, text: "c" }, { mods: 0, text: "c" }]
     var answer = textAnswer(steps)
     var state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, answer, textEvent(steps[0]), {}), "progress")
+    compare(AnswerMatcher.advance(state, answer, textEvent(steps[0])), "progress")
     compare(AnswerMatcher.typedSteps(state), 1)
-    compare(AnswerMatcher.advance(state, answer, textEvent(steps[1]), {}), "progress")
+    compare(AnswerMatcher.advance(state, answer, textEvent(steps[1])), "progress")
     compare(AnswerMatcher.typedSteps(state), 2)
-    compare(AnswerMatcher.advance(state, answer, textEvent(steps[2]), {}), "hit")
+    compare(AnswerMatcher.advance(state, answer, textEvent(steps[2])), "hit")
     compare(AnswerMatcher.typedSteps(state), 0)
   }
 
@@ -1266,13 +964,13 @@ TestCase {
   function test_aWrongStepFailsTheWholeCard() {
     var answer = textAnswer([{ mods: 0, text: "g" }, { mods: 0, text: "c" }])
     var state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "g" }), {}), "progress")
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "x" }), {}), "miss")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "g" })), "progress")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "x" })), "miss")
     compare(AnswerMatcher.typedSteps(state), 0)
     // And the retype starts over rather than resuming mid-sequence.
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "c" }), {}), "miss")
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "g" }), {}), "progress")
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "c" }), {}), "hit")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "c" })), "miss")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "g" })), "progress")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "c" })), "hit")
   }
 
   // The card asked for `gc`; `gc` answers it. Waiting to see whether a third
@@ -1280,30 +978,70 @@ TestCase {
   function test_aCompletedSequenceAnswersWithoutWaitingForALongerOne() {
     var answer = textAnswer([{ mods: 0, text: "g" }, { mods: 0, text: "c" }])
     var state = AnswerMatcher.begin()
-    AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "g" }), {})
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "c" }), {}), "hit")
+    AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "g" }))
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "c" })), "hit")
     // Which is exactly why the card that follows has to be deaf for a moment.
     verify(AnswerMatcher.overruns(answer))
     verify(!AnswerMatcher.overruns(textAnswer([{ mods: 0, text: "g" }])))
   }
 
-  // The Hyprland ground goes down this same path, and must judge as it did.
-  function test_aChordIsTheLengthOneCaseAndJudgesAsBefore() {
-    var item = binding({ key: "3", arg: "3", description: "Switch to workspace 3" })
-    var answer = AnswerMatcher.chordAnswer(item)
-    compare(AnswerMatcher.stepCount(answer), 1)
-    compare(AnswerMatcher.judgeMode(answer), "keysym")
-    verify(!AnswerMatcher.overruns(answer))
-    compare(AnswerMatcher.stepLabels(answer)[0].join(" + "), Normalizer.display(item))
+  function test_unsupportedJudgesFailClosedEvenWithTextShapedSteps() {
+    var modes = ["keysym", "physical", "logical", "unknown", "TEXT", "", null, undefined]
+    var step = { mods: 0, text: "g" }
+    var event = textEvent(step)
+    event.nativeScanCode = 42
+    for (var index = 0; index < modes.length; index++) {
+      var answer = { judgeMode: modes[index], steps: [step], alternates: [[step]] }
+      var state = { cursors: [1] }
+      compare(AnswerMatcher.judgeMode(answer), "")
+      compare(AnswerMatcher.normalizeInput(answer, event), null)
+      verify(!AnswerMatcher.stepMatches(answer, step, TextKey.normalizeEvent(event)))
+      compare(AnswerMatcher.advance(state, answer, event), "miss")
+      compare(AnswerMatcher.typedSteps(state), 0)
+      compare(AnswerMatcher.stepCount(answer), 0)
+      compare(AnswerMatcher.stepLabels(answer).length, 0)
+      compare(AnswerMatcher.alternateLabels(answer).length, 0)
+      compare(AnswerMatcher.inputDisplay(answer, event), "")
+      verify(!AnswerMatcher.overruns(answer))
+    }
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(), null, event), "miss")
+    // Old chord records cannot be revived just by labelling them text.
+    var retired = { modMask: 0, key: "G", keycode: 42, matchMode: "physical" }
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(), textAnswer([retired]), event), "miss")
+  }
 
-    var hit = { key: 0x33, text: "3", modifiers: qtSuper, isAutoRepeat: false }
-    var wrong = { key: 0x34, text: "4", modifiers: qtSuper, isAutoRepeat: false }
-    var state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, answer, hit, {}), "hit")
-    compare(AnswerMatcher.advance(state, answer, wrong, {}), "miss")
-    // Byte for byte the old verdict, reached the new way.
-    verify(Normalizer.matches(item, Normalizer.normalizeEvent(hit), {}))
-    verify(!Normalizer.matches(item, Normalizer.normalizeEvent(wrong), {}))
+  function test_textJudgingNeverReadsPhysicalCodesOrTranslatesSymbols() {
+    var event = { key: Qt.Key_Question, text: "?", modifiers: qtShift }
+    Object.defineProperty(event, "nativeScanCode", {
+      get: function() { throw new Error("physical input path was accessed") }
+    })
+    var question = textAnswer([{ mods: 0, text: "?" }])
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(), question, event), "hit")
+    compare(AnswerMatcher.inputDisplay(question, event), "?")
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(),
+        textAnswer([{ mods: 0, text: "/" }]), event), "miss")
+    var input = AnswerMatcher.normalizeInput(question, event)
+    verify(!Object.prototype.hasOwnProperty.call(input, "physicalCode"))
+    verify(!Object.prototype.hasOwnProperty.call(input, "logicalKey"))
+
+    // Same text from different physical keys still answers; the right scan
+    // code with missing or wrong text never answers a character step.
+    var lower = textAnswer([{ mods: 0, text: "g" }])
+    var codes = [0, 42, 94]
+    for (var index = 0; index < codes.length; index++) {
+      var pressed = { key: Qt.Key_G, text: "g", modifiers: 0, nativeScanCode: codes[index] }
+      compare(AnswerMatcher.advance(AnswerMatcher.begin(), lower, pressed), "hit")
+      pressed.text = ""
+      compare(AnswerMatcher.advance(AnswerMatcher.begin(), lower, pressed), "miss")
+      pressed.text = "G"
+      compare(AnswerMatcher.advance(AnswerMatcher.begin(), lower, pressed), "miss")
+    }
+    // No scan-code-only fallback for the former special-key workaround.
+    var tab = textAnswer([{ mods: 0, named: "TAB" }])
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(), tab,
+        { key: 0x01ffffff, text: "", nativeScanCode: 23 }), "miss")
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(), tab,
+        { key: Qt.Key_Tab, text: "\t", nativeScanCode: 0 }), "hit")
   }
 
   // What a delegate is actually handed. A model value reaches one through
@@ -1312,10 +1050,11 @@ TestCase {
   // each row in the set-aside drawer showed a description beside an empty
   // column where its keys belong.
   function test_answersSurviveTheTripThroughAModel() {
-    var step = { modMask: 65, key: "P", keycode: 0, matchMode: "logical" }
-    var converted = { judgeMode: "keysym", context: "", steps: { length: 1, 0: step } }
+    var step = { mods: 4, text: "w" }
+    var converted = { judgeMode: "text", context: "normal", steps: { length: 1, 0: step } }
     compare(AnswerMatcher.stepCount(converted), 1)
-    compare(AnswerMatcher.stepLabels(converted)[0].join(" + "), "SUPER + SHIFT + P")
+    compare(AnswerMatcher.stepLabels(converted)[0].join(" + "), "CTRL + w")
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(), converted, textEvent(step)), "hit")
 
     var sequence = {
       judgeMode: "text", context: "normal",
@@ -1327,8 +1066,8 @@ TestCase {
     }).join(" › "), "[ › w")
     // And it is still judged, not just drawn.
     var state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, sequence, textEvent({ mods: 0, text: "[" }), {}), "progress")
-    compare(AnswerMatcher.advance(state, sequence, textEvent({ mods: 0, text: "w" }), {}), "hit")
+    compare(AnswerMatcher.advance(state, sequence, textEvent({ mods: 0, text: "[" })), "progress")
+    compare(AnswerMatcher.advance(state, sequence, textEvent({ mods: 0, text: "w" })), "hit")
   }
 
   // One action, several ways to reach it. herdr's own listing says
@@ -1346,22 +1085,22 @@ TestCase {
 
     // The shown answer.
     var state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "d" }), {}), "progress")
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "$" }), {}), "hit")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "d" })), "progress")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "$" })), "hit")
 
     // The other one, from the first key press.
     state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "D" }), {}), "hit")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "D" })), "hit")
 
     // And something neither accepts is still wrong.
     state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "x" }), {}), "miss")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "x" })), "miss")
 
     // A candidate that diverges partway drops out without taking the other
     // with it: "d" starts the shown answer, "w" is in neither.
     state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "d" }), {}), "progress")
-    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "w" }), {}), "miss")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "d" })), "progress")
+    compare(AnswerMatcher.advance(state, answer, textEvent({ mods: 0, text: "w" })), "miss")
   }
 
   function test_alternatesSurviveQmlArrayLikeConversion() {
@@ -1373,7 +1112,7 @@ TestCase {
     }
     compare(AnswerMatcher.alternateLabels(answer).join(","), "D")
     compare(AnswerMatcher.advance(AnswerMatcher.begin(), answer,
-                                  textEvent({ mods: 0, text: "D" }), {}), "hit")
+                                  textEvent({ mods: 0, text: "D" })), "hit")
   }
 
   function test_answersAreBoundedInSteps() {
@@ -1383,7 +1122,7 @@ TestCase {
     compare(AnswerMatcher.stepCount({ steps: [] }), 0)
     compare(AnswerMatcher.stepCount(null), 0)
     var state = AnswerMatcher.begin()
-    compare(AnswerMatcher.advance(state, { steps: [] }, textEvent({ mods: 0, text: "a" }), {}), "miss")
+    compare(AnswerMatcher.advance(state, { steps: [] }, textEvent({ mods: 0, text: "a" })), "miss")
   }
 
   // A longer answer takes longer to type. The clamps were chosen for one
@@ -1391,10 +1130,10 @@ TestCase {
   function test_cardTimeGrowsWithTheStepCount() {
     var stats = Stats.defaults()
     var one = binding({ key: "3", arg: "3", description: "Switch to workspace 3" })
-    one.id = "hyprland/one"
-    one.answer = AnswerMatcher.chordAnswer(one)
+    one.id = "lazyvim/one"
+    one.answer = textAnswer([{ mods: 0, text: "g" }])
     var three = binding({ key: "4", arg: "4", description: "Switch to workspace 4" })
-    three.id = "hyprland/three"
+    three.id = "lazyvim/three"
     three.answer = textAnswer([{ mods: 0, text: "g" }, { mods: 0, text: "c" }, { mods: 0, text: "c" }])
 
     var learningOne = { binding: one, tier: "learning", queue: "due", remedial: false }
@@ -1409,29 +1148,6 @@ TestCase {
 
     // A guided card is still untimed however long its answer is.
     compare(Scheduler.durationFor({ binding: three, tier: "guided", queue: "unseen" }, stats), 0)
-  }
-
-  // Esc saves the run and leaves. A bind answering with a bare Esc cannot be
-  // answered at all - releasing it exits - so it is not dealt. Esc held with a
-  // modifier is a different gesture, decided on release, and stays trainable.
-  function test_bareEscapeAnswersAreNotDealtButModifiedOnesAre() {
-    var bare = binding({ modMask: 0, key: "ESCAPE", description: "Show the menu" })
-    var modified = binding({ modMask: 64, key: "ESCAPE", description: "Show the menu" })
-    compare(Eligibility.reason(bare), "escape-in-answer")
-    compare(Eligibility.reason(modified), "")
-
-    var result = Eligibility.filter([bare, modified], {})
-    compare(result.eligible.length, 1)
-    compare(result.eligible[0].modMask, 64)
-  }
-
-  // Every eligible binding carries an answer, because that is what the card
-  // draws and what the matcher judges.
-  function test_eligibleBindingsCarryAnAnswer() {
-    var item = binding({ key: "8", arg: "8", description: "Switch to workspace 8" })
-    var result = Eligibility.filter([item], {})
-    compare(AnswerMatcher.stepCount(result.eligible[0].answer), 1)
-    compare(AnswerMatcher.judgeMode(result.eligible[0].answer), "keysym")
   }
 
   // --- packs: the compiled-in table of an application-level ground ---
@@ -1538,76 +1254,22 @@ TestCase {
     testPack.refresh()
   }
 
-  function test_tmuxPrefersAnActuallyEnabledCBAndNeverInventsOne() {
-    var omarchy = Profiles.resolvedOptions("tmux", {
-      prefix: "C-Space", prefix2: "C-b"
-    })
-    compare(omarchy.prefix, "C-b")
-    compare(omarchy.prefix2, "C-Space")
-
-    var custom = Profiles.resolvedOptions("tmux", { prefix: "C-a", prefix2: "C-x" })
-    compare(custom.prefix, "C-a")
-    compare(custom.prefix2, "C-x")
-
-    var sole = Profiles.resolvedOptions("tmux", { prefix: "C-a" })
-    compare(sole.prefix, "C-a")
-    compare(sole.prefix2, "")
-
-    var duplicate = Profiles.resolvedOptions("tmux", { prefix2: "C-b" })
-    compare(duplicate.prefix, "C-b")
-    compare(duplicate.prefix2, "")
-
-    // A prefix set to something this cannot read is not an invitation to put
-    // C-b in front of a prefix that was read: that would make the card ask for
-    // a key the machine may never have bound.
-    var unreadable = Profiles.resolvedOptions("tmux", { prefix: "F13", prefix2: "C-a" })
-    compare(unreadable.prefix, "C-a")
-    compare(unreadable.prefix2, "")
-    // With nothing readable at all, nothing was proved and the default is all
-    // there is.
-    compare(Profiles.resolvedOptions("tmux", { prefix: "F13" }).prefix, "C-b")
-    compare(Profiles.resolvedOptions("tmux", ({})).prefix, "C-b")
-  }
-
-  // The shipped tmux table was collected against tmux's own default of C-b,
-  // but Omarchy's tmux.conf moves the prefix to C-Space - so every Omarchy
-  // machine also enables C-Space. The prefix is detected configuration now.
-  function test_theTmuxPrefixIsDetectedRatherThanBakedIn() {
-    var pack = Packs.pack("tmux")
-    verify(pack !== null)
-    for (var index = 0; index < pack.bindings.length; index++) {
-      var steps = pack.bindings[index].steps
-      compare(steps[0].option, "prefix",
-              pack.bindings[index].localId + " does not start with the prefix option")
-      // And its identity does not contain the prefix, so moving it keeps the
-      // entry - and its progress - intact.
-      verify(pack.bindings[index].localId.indexOf("C-b") === -1)
-    }
-
-    var source = testPack
-    source.profileId = "tmux"
-    source.options = ({})
-    source.refresh()
-    compare(source.error, "")
-    verify(source.bindings.length > 50)
-    var byDefault = source.bindings[0]
-    compare(byDefault.answer.steps[0].mods, 4)
-    compare(byDefault.answer.steps[0].text, "b")
-
-    source.options = ({ prefix: "C-Space" })
-    source.refresh()
-    var moved = source.bindings[0]
-    compare(moved.answer.steps[0].named, "SPACE")
-    compare(moved.answer.steps[0].mods, 4)
-    compare(moved.id, byDefault.id)
-
-    source.options = ({ prefix: "C-b", prefix2: "C-b" })
-    source.refresh()
-    compare(source.bindings[0].answer.alternates.length, 0)
-
-    source.profileId = "lazyvim"
-    source.options = ({ leader: " " })
-    source.refresh()
+  function test_detectedLeaderOptionsRemainBoundedAndDeclared() {
+    var defaults = Profiles.resolvedOptions("lazyvim", null)
+    compare(defaults.leader, " ")
+    compare(defaults.localleader, "\\")
+    var custom = Profiles.resolvedOptions("lazyvim", { leader: ",", localleader: "-" })
+    compare(custom.leader, ",")
+    compare(custom.localleader, "-")
+    var invalid = Profiles.resolvedOptions("lazyvim", { leader: "F13", localleader: "x".repeat(33) })
+    compare(invalid.leader, " ")
+    compare(invalid.localleader, "\\")
+    var hostile = JSON.parse('{"leader":",","prefix":"C-a","__proto__":{},"constructor":"x","prototype":"x"}')
+    var resolved = Profiles.resolvedOptions("lazyvim", hostile)
+    compare(Object.getPrototypeOf(resolved), null)
+    compare(Object.keys(resolved).join(","), "leader,localleader")
+    compare(resolved.leader, ",")
+    compare(Object.keys(Profiles.resolvedOptions("tmux", hostile)).length, 0)
   }
 
   // A bundle LazyVim ships but does not enable is real on a machine that
@@ -1670,6 +1332,9 @@ TestCase {
     verify(added !== null)
     compare(added.customKind, "added")
     compare(AnswerMatcher.stepCount(added.answer), 2)
+    compare(typeAll(added.answer, [{ text: "g" }, { text: "Z" }]).verdict, "hit")
+    compare(typeAll(added.answer, [{ text: "g" }, { text: "z" }]).verdict, "miss")
+    compare(typeAll(changed.answer, [{ named: "SPACE" }, { text: "f" }, { text: "f" }]).verdict, "hit")
     compare(removed, null)
     compare(testPack.customAdded, 1)
     compare(testPack.customChanged, 1)
@@ -1691,48 +1356,6 @@ TestCase {
     compare(testPack.customDeleted, 0)
     compare(testPack.customSkipped, 1)
     testPack.overrides = []
-    testPack.refresh()
-  }
-
-  function test_theVimGrammarPackLoadsWithItsEquivalentAnswers() {
-    testPack.profileId = "vim"
-    testPack.options = ({})
-    testPack.enabledExtras = []
-    testPack.overrides = []
-    testPack.packOverride = null
-    testPack.refresh()
-    compare(testPack.error, "")
-    verify(testPack.bindings.length > 100)
-    var shorthand = null
-    for (var index = 0; index < testPack.bindings.length; index++) {
-      if (testPack.bindings[index].localId === "normal/D") shorthand = testPack.bindings[index]
-    }
-    verify(shorthand !== null)
-    compare(AnswerMatcher.alternateLabels(shorthand.answer).join(""), "d › $")
-    testPack.profileId = "lazyvim"
-    testPack.options = ({ leader: " ", localleader: "\\" })
-    testPack.refresh()
-  }
-
-  function test_anUnreadableLiveTmuxTableFallsBackToTheShippedPack() {
-    testPack.profileId = "tmux"
-    testPack.options = ({ prefix: "C-b", prefix2: "" })
-    testPack.enabledExtras = []
-    testPack.overrides = []
-    testPack.packOverride = {
-      schemaVersion: 1, profile: "tmux", judgeMode: "text",
-      contexts: ["prefix"], categories: ["misc"], extras: [],
-      provenance: {}, bindings: [
-        { localId: "prefix/bad", context: "prefix", category: "misc",
-          desc: "Unreadable", steps: [{ mods: 0, named: "ESC" }], extras: [] }
-      ]
-    }
-    testPack.refresh()
-    compare(testPack.error, "")
-    compare(testPack.packOverride, null)
-    compare(testPack.bindings.length, Packs.pack("tmux").bindings.length)
-    testPack.profileId = "lazyvim"
-    testPack.options = ({ leader: " ", localleader: "\\" })
     testPack.refresh()
   }
 
@@ -1762,6 +1385,7 @@ TestCase {
     }
     verify(spaced !== null)
     compare(spaced.answer.steps[0].named, "SPACE")
+    compare(typeAll(spaced.answer, [{ named: "SPACE" }, { text: "f" }, { text: "f" }]).verdict, "hit")
 
     testPack.options = ({ leader: "," })
     testPack.refresh()
@@ -1771,9 +1395,74 @@ TestCase {
     }
     verify(comma !== null)
     compare(comma.answer.steps[0].text, ",")
+    compare(typeAll(comma.answer, [{ text: "," }, { text: "f" }, { text: "f" }]).verdict, "hit")
+    compare(AnswerMatcher.advance(AnswerMatcher.begin(), comma.answer,
+        textEvent({ named: "SPACE" })), "miss")
     // The entry keeps its identity across the change, so progress survives it.
     compare(comma.id, spaced.id)
     testPack.options = ({ leader: " " })
+    testPack.refresh()
+  }
+
+  function test_leaderFindSequenceHoldsPrefixThenHitsOrSchedulesRemedial() {
+    testPack.options = Profiles.resolvedOptions("lazyvim", { leader: " " })
+    testPack.refresh()
+    var card = testPack.bindings.find(function(item) { return item.localId === "normal/<leader>ff" })
+    verify(card !== undefined)
+    compare(AnswerMatcher.stepCount(card.answer), 3)
+    var stats = Stats.defaults()
+    Stats.recordGuided(stats, card.id, 1, 100)
+    var before = JSON.stringify(stats)
+    var state = AnswerMatcher.begin()
+    compare(AnswerMatcher.advance(state, card.answer, textEvent({ named: "SPACE" })), "progress")
+    compare(AnswerMatcher.advance(state, card.answer, textEvent({ text: "f" })), "progress")
+    compare(AnswerMatcher.typedSteps(state), 2)
+    // A held prefix yields neither a hit nor a miss; callers must not record
+    // a first try or a lapse until a terminal verdict (Keycade.handleGameInput).
+    compare(JSON.stringify(stats), before)
+    var hit = AnswerMatcher.advance(state, card.answer, textEvent({ text: "f" }))
+    compare(hit, "hit")
+    Stats.recordFirstTry(stats, card.id, hit === "hit", 600, 1, 700)
+    compare(stats.bindings[card.id].firstTryAttempts, 1)
+    compare(stats.bindings[card.id].firstTryCorrect, 1)
+    compare(stats.bindings[card.id].lapseCount, 0)
+    compare(AnswerMatcher.typedSteps(state), 0)
+
+    compare(AnswerMatcher.advance(state, card.answer, textEvent({ named: "SPACE" })), "progress")
+    var miss = AnswerMatcher.advance(state, card.answer, textEvent({ text: "x" }))
+    compare(miss, "miss")
+    compare(AnswerMatcher.typedSteps(state), 0)
+    // The terminal miss feeds the existing first-try/remedial seam; the
+    // scheduler still spaces the retest three to five other cards away.
+    Stats.recordFirstTry(stats, card.id, miss === "hit", -1, 2, 800)
+    var run = Scheduler.build(testPack.bindings, stats, 24, { now: 800, runId: 2 })
+    run[0] = { binding: card, tier: "learning", queue: "due", remedial: false }
+    var remedial = Scheduler.insertRemedial(run, 0, card)
+    compare(stats.bindings[card.id].firstTryAttempts, 2)
+    compare(stats.bindings[card.id].firstTryCorrect, 1)
+    compare(stats.bindings[card.id].lapseCount, 1)
+    var retest = remedial.findIndex(function(item) { return item.remedial && item.binding.id === card.id })
+    verify(retest >= 4 && retest <= 6)
+    // A correction must retype the leader; completing only the old suffix
+    // cannot answer after the miss.
+    compare(AnswerMatcher.advance(state, card.answer, textEvent({ text: "f" })), "miss")
+    compare(typeAll(card.answer, [{ named: "SPACE" }, { text: "f" }, { text: "f" }]).verdict, "hit")
+  }
+
+  function test_customLocalleaderUsesTheSameTextSequencePath() {
+    testPack.options = Profiles.resolvedOptions("lazyvim", { leader: ",", localleader: "-" })
+    testPack.overrides = [{ op: "set", lhs: "<localleader>u", desc: "My local command", contexts: ["normal"] }]
+    testPack.refresh()
+    var custom = testPack.bindings.find(function(item) { return item.localId === "normal/<localleader>u" })
+    verify(custom !== undefined)
+    compare(custom.customKind, "added")
+    compare(custom.category, "misc")
+    compare(typeAll(custom.answer, [{ text: "-" }, { text: "u" }]).verdict, "hit")
+    var state = AnswerMatcher.begin()
+    compare(AnswerMatcher.advance(state, custom.answer, textEvent({ text: "-" })), "progress")
+    compare(AnswerMatcher.advance(state, custom.answer, textEvent({ text: "U" })), "miss")
+    testPack.options = Profiles.resolvedOptions("lazyvim", null)
+    testPack.overrides = []
     testPack.refresh()
   }
 
@@ -1832,36 +1521,6 @@ TestCase {
     }, ["find"]), null)
   }
 
-  function test_liveTmuxPayloadIsRebuiltFromAWhitelistedSchema() {
-    var raw = {
-      schemaVersion: 1, profile: "tmux", judgeMode: "text", available: true,
-      options: { prefix: "C-b", prefix2: "C-a" }, categories: ["misc"],
-      provenance: { upstream: "tmux", source: { tag: "live", checksum: "a".repeat(64),
-                                                 ignored: { nested: true } }, ignored: true },
-      bindings: [{
-        localId: "prefix/x", context: "prefix", notation: "prefix x",
-        steps: [{ option: "prefix", ignored: true }, { mods: 0, text: "x", ignored: true }],
-        alternates: [[{ option: "prefix2" }, { text: "x" }]], category: "misc",
-        descKey: "tmuxdesc_x", desc: "Do x", extras: [], ignored: { nested: true }
-      }],
-      ignored: { nested: true }
-    }
-    var accepted = ExternalPack.acceptedTmuxPack(raw)
-    verify(accepted !== null)
-    compare(accepted.ignored, undefined)
-    compare(accepted.bindings[0].ignored, undefined)
-    compare(accepted.bindings[0].steps[0].ignored, undefined)
-    compare(accepted.provenance.ignored, undefined)
-    compare(accepted.provenance.source.ignored, undefined)
-    raw.bindings[0].desc = "mutated"
-    compare(accepted.bindings[0].desc, "Do x")
-
-    raw.categories = ["__proto__"]
-    compare(ExternalPack.acceptedTmuxPack(raw), null)
-    compare(ExternalPack.acceptedCategories(["pane", "misc"], 32).join(","), "pane,misc")
-    compare(ExternalPack.acceptedCategories(["prototype"], 32), null)
-  }
-
   function test_schedulerCountsPrototypeNamedExternalIds() {
     var deck = [
       { binding: { id: "__proto__" }, tier: "guided", queue: "unseen" },
@@ -1880,7 +1539,7 @@ TestCase {
     testPack.profileId = "lazyvim"
     testPack.options = ({ leader: " " })
     testPack.enabledExtras = []
-    testPack.packOverride = {
+    var hostilePack = {
       schemaVersion: 1,
       profile: "lazyvim",
       judgeMode: "text",
@@ -1898,18 +1557,27 @@ TestCase {
       { op: "set", contexts: ["normal"], lhs: "g", desc: "Mine" },
       { op: "set", contexts: ["normal"], lhs: "__proto__", desc: "Nope" }
     ]
-    testPack.refresh()
-    compare(Object.prototype.constructor, originalConstructor)
-    compare(({}).pwned, undefined)
+    // No live table override survives. Exercise the same merge and consumer
+    // validation directly with hostile records before refreshing the real pack.
+    var records = testPack.mergedBindings(hostilePack)
     var foundSafe = false
-    var foundProto = false
-    for (var index = 0; index < testPack.bindings.length; index++) {
-      if (testPack.bindings[index].localId === "normal/g") foundSafe = true
-      if (testPack.bindings[index].localId === "__proto__") foundProto = true
+    var refused = 0
+    for (var index = 0; index < records.length; index++) {
+      var item = testPack.acceptedBinding(records[index], hostilePack.categories)
+      if (!item) { refused += 1; continue }
+      verify(item.localId !== "__proto__" && item.localId !== "constructor")
+      if (item.localId === "normal/g") {
+        foundSafe = true
+        compare(item.actionName, "Mine")
+        compare(item.customKind, "changed")
+      }
     }
     compare(foundSafe, true)
-    compare(foundProto, false)
-    testPack.packOverride = null
+    compare(refused, 2)
+    testPack.refresh()
+    compare(testPack.error, "")
+    compare(Object.prototype.constructor, originalConstructor)
+    compare(({}).pwned, undefined)
     testPack.overrides = []
     testPack.refresh()
   }
@@ -1943,12 +1611,13 @@ TestCase {
   // registry has to agree with it: the loader validates against the registry
   // while the pack is what the table was actually built to.
   function test_everyPackAgreesWithTheRegistryAboutItsContexts() {
-    var ids = Profiles.ids()
+    var ids = Packs.ids()
+    compare(ids.join(","), "lazyvim")
     for (var index = 0; index < ids.length; index++) {
       var id = ids[index]
-      if (!Profiles.isPack(id)) continue
+      verify(Profiles.isPack(id), id + " ships a pack but is not registered")
       var pack = Packs.pack(id)
-      verify(pack !== null, id + " is registered but ships no pack")
+      verify(pack !== null)
       compare(pack.profile, id)
       // The registry says what the ground can pose; the pack says what its
       // table actually holds. A pack context outside the registry would be
@@ -1961,8 +1630,11 @@ TestCase {
                id + " ships context " + pack.contexts[context] + " its ground does not pose")
       verify(pack.categories.length > 0, id)
     }
-    // And a ground that reads the machine ships no pack at all.
-    compare(Packs.pack("hyprland"), null)
+    // Retired supplies cannot be loaded, even while the old profile registry
+    // is awaiting its separate teardown.
+    var retired = ["hyprland", "herdr", "tmux", "vim", "neovim"]
+    for (var old = 0; old < retired.length; old++)
+      compare(Packs.pack(retired[old]), null)
   }
 
   // A pack ships the upstream's English; the language packs answer it. The
@@ -1999,19 +1671,8 @@ TestCase {
     testI18n.locale = "en"
   }
 
-  // The drawer lists what you set aside, and a row is useless without the
-  // keys: "Switch to workspace 2" is not something you can look up.
-  function test_setAsideRowsStillCarryTheirKeysOnEveryGround() {
-    var kept = binding({ key: "1", arg: "1", description: "Switch to workspace 1" })
-    var dropped = binding({ key: "2", arg: "2", description: "Switch to workspace 2" })
-    var result = Eligibility.filter([kept, dropped], {
-      excludedBindings: ["hyprland:" + Normalizer.bindingId(dropped)]
-    })
-    compare(result.excluded.length, 1)
-    var row = result.excluded[0].binding
-    verify(row.answer !== undefined, "a set-aside Hyprland bind carries no answer")
-    compare(AnswerMatcher.stepLabels(row.answer)[0].join(" + "), "SUPER + 2")
-
+  // The drawer lists what you set aside, including its answer keys.
+  function test_setAsideRowsStillCarryTheirKeys() {
     testPack.options = ({ leader: " " })
     testPack.refresh()
     var packResult = PackEligibility.filter(testPack.bindings, {
@@ -2041,7 +1702,7 @@ TestCase {
     testPack.refresh()
     var stats = Stats.defaults()
     var deck = Scheduler.build(testPack.bindings, stats, 24,
-                               { now: 1000, runId: 1, profile: "lazyvim" })
+                               { now: 1000, runId: 1, deckId: "all" })
     compare(deck.length, 24)
     for (var index = 0; index < deck.length; index++)
       compare(Profiles.profileOf(deck[index].binding.id), "lazyvim")
@@ -2051,18 +1712,18 @@ TestCase {
     var state = AnswerMatcher.begin()
     var verdict = ""
     for (var step = 0; step < answer.steps.length; step++)
-      verdict = AnswerMatcher.advance(state, answer, textEvent(answer.steps[step]), {})
+      verdict = AnswerMatcher.advance(state, answer, textEvent(answer.steps[step]))
     compare(verdict, "hit")
 
     Stats.recordGuided(stats, deck[0].binding.id, 1, 1000)
     Stats.recordFirstTry(stats, deck[0].binding.id, true, 900, 1, 2000)
-    Scheduler.markCovered(testPack.bindings, stats, deck[0].binding.id)
-    Stats.completeRun(stats, "lazyvim")
+    Scheduler.markCovered(testPack.bindings, stats, deck[0].binding.id, "all")
+    Stats.completeRun(stats, "all")
 
-    // The Hyprland ground's counters are untouched by any of it.
-    compare(Stats.runsOf(stats, "lazyvim"), 1)
+    // The retired ground's counters are untouched by any of it.
+    compare(Stats.runsOf(stats, "all"), 1)
     compare(Stats.runsOf(stats, "hyprland"), 0)
-    verify(Stats.counters(stats, "lazyvim").coverageCursor !== 0)
+    verify(Stats.counters(stats, "all").coverageCursor !== 0)
     compare(Stats.counters(stats, "hyprland").coverageCursor, 0)
     compare(Object.keys(stats.bindings)[0].slice(0, 8), "lazyvim/")
   }
@@ -2104,18 +1765,4 @@ TestCase {
     }
   }
 
-  function test_builtinActionsHaveLocaleKeysAndCustomTextStaysRaw() {
-    compare(Actions.translation(binding({ description: "Close window" })).key, "action_closeWindow")
-    var workspace = Actions.translation(binding({ description: "Switch to workspace 3" }))
-    compare(workspace.key, "action_switchWorkspace")
-    compare(workspace.values.workspace, "3")
-    compare(Actions.translation(binding({ description: "My custom backup script", dispatcher: "__lua" })), null)
-    var chinese = {
-      messages: { action_closeWindow: "关闭当前窗口" },
-      t: function(key) { return chinese.messages[key] || key }
-    }
-    compare(Actions.actionName(binding({ description: "Close window" }), chinese), "关闭当前窗口")
-    compare(Actions.actionName(binding({ description: "My custom backup script", dispatcher: "__lua" }), chinese),
-            "My custom backup script")
-  }
 }

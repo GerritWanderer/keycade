@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland._ShortcutsInhibitor
+import "GuardStatus.js" as GuardStatus
 
 Item {
   id: root
@@ -142,9 +143,9 @@ Item {
       }
       try {
         if (preflightOutput.overflowed) throw new Error("oversized preflight")
-        var option = JSON.parse(preflightOutput.value)
-        if (!option || option.schemaVersion !== 1 || typeof option.disabled !== "boolean")
-          throw new Error("invalid preflight schema")
+        // R2: the record is validated on this end, against the versioned
+        // guard schema - never trusted because the helper emitted it.
+        var option = GuardStatus.parsePreflightRecord(preflightOutput.value)
         if (option.disabled) root.fail("Hyprland has binds:disable_keybind_grabbing enabled.")
         else root.acquire()
       } catch (error) {

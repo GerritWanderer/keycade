@@ -22,9 +22,9 @@ if [[ -z ${WAYLAND_DISPLAY:-} ]]; then
   exit 1
 fi
 
-# theme locale ground view binding outfile
+# theme locale view binding outfile (LazyVim is the only supply)
 shoot() {
-  local theme=$1 locale=$2 ground=$3 view=$4 binding=$5 out=$6
+  local theme=$1 locale=$2 view=$3 binding=$4 out=$5
   local root="$work/run"
   rm -rf -- "$root"
   mkdir -p -- "$root/config" "$root/state/omarchy/keycade"
@@ -33,19 +33,17 @@ shoot() {
   cp -- "$repo/tools/screenshot-shell.qml" "$root/config/shell.qml"
   [[ -f ~/.local/state/omarchy/keycade/stats.json ]] \
     && cp -- ~/.local/state/omarchy/keycade/stats.json "$root/state/omarchy/keycade/stats.json"
-  # Parked on another ground, so selectProfile always has work to do - which is
-  # also how the script knows the store has finished loading.
-  python3 - "$root/state/omarchy/keycade/settings.json" "$ground" <<'PY'
+  # The shell waits explicitly for StateStore readiness before loading LazyVim.
+  python3 - "$root/state/omarchy/keycade/settings.json" <<'PY'
 import json, sys
-other = "neovim" if sys.argv[2] != "neovim" else "vim"
 open(sys.argv[1], "w").write(json.dumps({
     "schemaVersion": 3, "locale": "en", "theme": "catppuccin",
-    "activeProfile": other, "excludedBindings": [],
+    "activeProfile": "lazyvim", "excludedBindings": [],
     "feedbackSound": True, "countdownSound": True, "soundVolume": 0.4}) + "\n")
 PY
 
   local log="$root/log"
-  SHOT_THEME=$theme SHOT_LOCALE=$locale SHOT_GROUND=$ground SHOT_VIEW=$view \
+  SHOT_THEME=$theme SHOT_LOCALE=$locale SHOT_VIEW=$view \
   SHOT_BINDING=$binding XDG_STATE_HOME="$root/state" \
     quickshell --no-color --path "$root/config/shell.qml" > "$log" 2>&1 &
   local pid=$!
@@ -76,13 +74,13 @@ PY
   printf '%s  %s\n' "$(basename -- "$out")" "$(grep -o 'SHOT_CARD.*' "$log" || true)"
 }
 
-terminal='64|RETURN|__lua|284'
+binding='normal/<leader>ff'
 shots="$repo/docs/screenshots"
 
-shoot gruvbox    en    hyprland playing "$terminal"         "$repo/preview.png"
-shoot catppuccin en    hyprland playing "$terminal"         "$shots/keycade-en.png"
-shoot catppuccin zh-CN hyprland playing "$terminal"         "$shots/keycade-zh-CN.png"
-shoot tokyo      en    hyprland home    ""                  "$shots/keycade-grounds-en.png"
-shoot tokyo      zh-CN hyprland home    ""                  "$shots/keycade-grounds-zh-CN.png"
-shoot everforest en    lazyvim  playing 'normal/<leader>ff' "$shots/keycade-lazyvim-en.png"
-shoot everforest zh-CN lazyvim  playing 'normal/<leader>ff' "$shots/keycade-lazyvim-zh-CN.png"
+shoot gruvbox    en    playing "$binding" "$repo/preview.png"
+shoot catppuccin en    playing "$binding" "$shots/keycade-en.png"
+shoot catppuccin zh-CN playing "$binding" "$shots/keycade-zh-CN.png"
+shoot tokyo      en    home    ""         "$shots/keycade-grounds-en.png"
+shoot tokyo      zh-CN home    ""         "$shots/keycade-grounds-zh-CN.png"
+shoot everforest en    playing "$binding" "$shots/keycade-lazyvim-en.png"
+shoot everforest zh-CN playing "$binding" "$shots/keycade-lazyvim-zh-CN.png"

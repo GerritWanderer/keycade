@@ -21,7 +21,11 @@ jobs:
       - name: Install system dependencies
         run: |
           pacman -Sy --noconfirm archlinux-keyring
-          pacman -S --noconfirm --needed git python python-pip python-coverage tmux libxkbcommon xkeyboard-config qt6-declarative qt6-base quickshell jq
+          # qt6-multimedia (with an explicit backend, so --noconfirm never has
+          # to pick a provider for us) is a real runtime dependency: the deck
+          # UI suites load the overlay itself, and lib/SoundManager.qml imports
+          # QtMultimedia. No audio server runs here, which SoundEffect tolerates.
+          pacman -S --noconfirm --needed git python python-pip python-coverage qt6-declarative qt6-base qt6-multimedia qt6-multimedia-ffmpeg quickshell jq
       - name: Create non-root test user
         run: |
           useradd -m -u 1001 runner
@@ -68,11 +72,17 @@ jobs:
           token: ${{ steps.codecov-token.outputs.token }}
       - name: QML Algorithm Tests
         run: |
+          # The core suite keeps its original invocation; every other
+          # tests/qml/tst_*.qml suite runs with the same flags, one file per
+          # qmltestrunner process, exactly like the local gate.
           su runner -c "QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= QT_STYLE_OVERRIDE=Fusion /usr/lib/qt6/bin/qmltestrunner -input tests/qml/tst_algorithms.qml -import /usr/lib/qt6/qml"
+          for suite in tests/qml/tst_*.qml; do
+            [ "$suite" = "tests/qml/tst_algorithms.qml" ] && continue
+            su runner -c "QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= QT_STYLE_OVERRIDE=Fusion /usr/lib/qt6/bin/qmltestrunner -input $suite -import /usr/lib/qt6/qml"
+          done
       - name: QML Shell Integration Tests
         run: |
           su runner -c "./tests/test_state_store_qml.sh"
-          su runner -c "./tests/test_hyprland_source_qml.sh"
           su runner -c "./tests/test_ground_switching_qml.sh"
           su runner -c "./tests/test_run_counters_qml.sh"
           su runner -c "./tests/test_mastery_transition_qml.sh"

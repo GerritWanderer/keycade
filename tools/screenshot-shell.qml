@@ -7,24 +7,23 @@ ShellRoot {
 
   readonly property string wantTheme: Quickshell.env("SHOT_THEME") || "gruvbox"
   readonly property string wantLocale: Quickshell.env("SHOT_LOCALE") || "en"
-  readonly property string wantGround: Quickshell.env("SHOT_GROUND") || "hyprland"
   readonly property string wantBinding: Quickshell.env("SHOT_BINDING") || ""
   readonly property string wantView: Quickshell.env("SHOT_VIEW") || "playing"
 
   property int tries: 0
 
-  // selectProfile refuses until the store has loaded, so asking repeatedly is
-  // the wait: the first call that takes is the one that had settings.
+  // Wait for persisted settings before loading the sole LazyVim supply.
+  // This does not open the overlay or activate the input guard.
   Timer {
     id: boot; interval: 300; running: true; repeat: true
     onTriggered: {
       tries += 1
       if (tries > 80) { console.log("SHOT_FAILED store never loaded"); Qt.quit(); return }
-      overlay.selectProfile(wantGround)
-      if (overlay.profileId !== wantGround) return
+      if (!overlay.stateReady) return
       running = false
       overlay.selectLocale(wantLocale)
       overlay.selectTheme(wantTheme)
+      overlay.loadActiveGround()
       settle.start()
     }
   }
@@ -33,7 +32,7 @@ ShellRoot {
     id: settle; interval: 300; repeat: true
     onTriggered: {
       tries += 1
-      if (tries > 160) { console.log("SHOT_FAILED ground never loaded"); Qt.quit(); return }
+      if (tries > 160) { console.log("SHOT_FAILED LazyVim never loaded"); Qt.quit(); return }
       if (overlay.groundLoading || !overlay.eligibleBindings.length) return
       running = false
       compose()

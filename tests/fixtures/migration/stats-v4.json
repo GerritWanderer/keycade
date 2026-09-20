@@ -1,0 +1,269 @@
+{
+  "schemaVersion": 4,
+  "bindings": {
+    "lazyvim/normal/<leader>ff": {
+      "state": "mastered",
+      "guidedCompleted": true,
+      "dueAt": 1700000000000,
+      "dueRun": 8,
+      "intervalStep": 2,
+      "firstTryAttempts": 5,
+      "firstTryCorrect": 4,
+      "recentFirstTry": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ],
+      "reactions": [
+        1800,
+        1400,
+        1200,
+        1000
+      ],
+      "successfulRuns": [
+        3,
+        4,
+        6
+      ],
+      "lastSuccessfulRun": 6,
+      "lastSeenAt": 1699900000000,
+      "lapseCount": 1
+    },
+    "hyprland/64|Q|killactive|": {
+      "state": "mastered",
+      "guidedCompleted": true,
+      "dueAt": 1700086400000,
+      "dueRun": 9,
+      "intervalStep": 2,
+      "firstTryAttempts": 5,
+      "firstTryCorrect": 4,
+      "recentFirstTry": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ],
+      "reactions": [
+        1801,
+        1401,
+        1201,
+        1001
+      ],
+      "successfulRuns": [
+        3,
+        4,
+        6
+      ],
+      "lastSuccessfulRun": 6,
+      "lastSeenAt": 1699900000001,
+      "lapseCount": 1
+    },
+    "herdr/default/split": {
+      "state": "mastered",
+      "guidedCompleted": true,
+      "dueAt": 1700172800000,
+      "dueRun": 10,
+      "intervalStep": 2,
+      "firstTryAttempts": 5,
+      "firstTryCorrect": 4,
+      "recentFirstTry": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ],
+      "reactions": [
+        1802,
+        1402,
+        1202,
+        1002
+      ],
+      "successfulRuns": [
+        3,
+        4,
+        6
+      ],
+      "lastSuccessfulRun": 6,
+      "lastSeenAt": 1699900000002,
+      "lapseCount": 1
+    },
+    "tmux/prefix/%": {
+      "state": "mastered",
+      "guidedCompleted": true,
+      "dueAt": 1700259200000,
+      "dueRun": 11,
+      "intervalStep": 2,
+      "firstTryAttempts": 5,
+      "firstTryCorrect": 4,
+      "recentFirstTry": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ],
+      "reactions": [
+        1803,
+        1403,
+        1203,
+        1003
+      ],
+      "successfulRuns": [
+        3,
+        4,
+        6
+      ],
+      "lastSuccessfulRun": 6,
+      "lastSeenAt": 1699900000003,
+      "lapseCount": 1
+    },
+    "vim/normal/gg": {
+      "state": "mastered",
+      "guidedCompleted": true,
+      "dueAt": 1700345600000,
+      "dueRun": 12,
+      "intervalStep": 2,
+      "firstTryAttempts": 5,
+      "firstTryCorrect": 4,
+      "recentFirstTry": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ],
+      "reactions": [
+        1804,
+        1404,
+        1204,
+        1004
+      ],
+      "successfulRuns": [
+        3,
+        4,
+        6
+      ],
+      "lastSuccessfulRun": 6,
+      "lastSeenAt": 1699900000004,
+      "lapseCount": 1
+    },
+    "neovim/normal/gd": {
+      "state": "mastered",
+      "guidedCompleted": true,
+      "dueAt": 1700432000000,
+      "dueRun": 13,
+      "intervalStep": 2,
+      "firstTryAttempts": 5,
+      "firstTryCorrect": 4,
+      "recentFirstTry": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ],
+      "reactions": [
+        1805,
+        1405,
+        1205,
+        1005
+      ],
+      "successfulRuns": [
+        3,
+        4,
+        6
+      ],
+      "lastSuccessfulRun": 6,
+      "lastSeenAt": 1699900000005,
+      "lapseCount": 1
+    },
+    "lazyvim/normal/<leader>gg": {
+      "state": "learning",
+      "guidedCompleted": true,
+      "dueAt": 1700000000000,
+      "dueRun": 8,
+      "intervalStep": 1,
+      "firstTryAttempts": 2,
+      "firstTryCorrect": 1,
+      "recentFirstTry": [
+        false,
+        true
+      ],
+      "reactions": [
+        2300
+      ],
+      "successfulRuns": [
+        7
+      ],
+      "lastSuccessfulRun": 7,
+      "lastSeenAt": 1699900000500,
+      "lapseCount": 1
+    }
+  },
+  "profiles": {
+    "lazyvim": {
+      "runs": 7,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true,
+      "knownTotal": 2,
+      "knownMastered": 1
+    },
+    "hyprland": {
+      "runs": 8,
+      "coverageCursor": 14,
+      "totalTrainingMs": 123457,
+      "firstMasteryAt": 1699800000001,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": false,
+      "knownTotal": 1,
+      "knownMastered": 1
+    },
+    "herdr": {
+      "runs": 9,
+      "coverageCursor": 15,
+      "totalTrainingMs": 123458,
+      "firstMasteryAt": 1699800000002,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true,
+      "knownTotal": 1,
+      "knownMastered": 1
+    },
+    "tmux": {
+      "runs": 10,
+      "coverageCursor": 16,
+      "totalTrainingMs": 123459,
+      "firstMasteryAt": 1699800000003,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": false,
+      "knownTotal": 1,
+      "knownMastered": 1
+    },
+    "vim": {
+      "runs": 11,
+      "coverageCursor": 17,
+      "totalTrainingMs": 123460,
+      "firstMasteryAt": 1699800000004,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true,
+      "knownTotal": 1,
+      "knownMastered": 1
+    },
+    "neovim": {
+      "runs": 12,
+      "coverageCursor": 18,
+      "totalTrainingMs": 123461,
+      "firstMasteryAt": 1699800000005,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": false,
+      "knownTotal": 1,
+      "knownMastered": 1
+    }
+  }
+}

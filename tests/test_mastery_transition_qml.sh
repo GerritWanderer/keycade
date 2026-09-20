@@ -22,18 +22,18 @@ if [[ -z ${WAYLAND_DISPLAY:-} ]]; then
   exit 0
 fi
 
-mkdir -p -- "$test_root/config" "$test_root/state"
+mkdir -p -- "$test_root/config" "$test_root/state" "$test_root/home"
 cp -r -- "$repo_root" "$test_root/config/keycade"
 rm -rf -- "$test_root/config/keycade/.git"
 
 cat > "$test_root/stats.json" <<'JSON'
-{"schemaVersion":4,"bindings":{"neovim/test":{"state":"learning","guidedCompleted":true,"dueAt":0,"dueRun":2,"intervalStep":2,"firstTryAttempts":1,"firstTryCorrect":1,"recentFirstTry":[true],"reactions":[900],"successfulRuns":[1],"lastSuccessfulRun":1,"lastSeenAt":1,"lapseCount":0}},"profiles":{"neovim":{"runs":1,"coverageCursor":0,"totalTrainingMs":1000,"firstMasteryAt":0,"firstMasteryRun":0,"firstMasteryCelebrated":false,"knownTotal":1,"knownMastered":0}}}
+{"schemaVersion":4,"bindings":{"lazyvim/test":{"state":"learning","guidedCompleted":true,"dueAt":0,"dueRun":2,"intervalStep":2,"firstTryAttempts":1,"firstTryCorrect":1,"recentFirstTry":[true],"reactions":[900],"successfulRuns":[1],"lastSuccessfulRun":1,"lastSeenAt":1,"lapseCount":0}},"profiles":{"lazyvim":{"runs":1,"coverageCursor":0,"totalTrainingMs":1000,"firstMasteryAt":0,"firstMasteryRun":0,"firstMasteryCelebrated":false,"knownTotal":1,"knownMastered":0}}}
 JSON
 cat > "$test_root/settings.json" <<'JSON'
-{"schemaVersion":3,"locale":"en","activeProfile":"neovim"}
+{"schemaVersion":3,"locale":"en","activeProfile":"lazyvim","feedbackSound":false,"countdownSound":false}
 JSON
 cat > "$test_root/session.json" <<'JSON'
-{"schemaVersion":1,"profileId":"neovim","runId":2,"offset":0,"cards":[{"bindingId":"neovim/test","tier":"learning","queue":"due","remedial":false}],"correct":0,"attempts":0,"newLearned":0,"masteredGained":0,"runReviewTarget":1,"runNewTarget":0,"pendingReinforcements":[],"reactions":[],"runResults":{},"correctionRequired":false,"savedAt":1}
+{"schemaVersion":1,"profileId":"lazyvim","runId":17,"offset":0,"cards":[{"bindingId":"lazyvim/test","tier":"learning","queue":"due","remedial":false}],"correct":0,"attempts":0,"newLearned":0,"masteredGained":0,"runReviewTarget":1,"runNewTarget":0,"pendingReinforcements":[],"reactions":[],"runResults":{},"correctionRequired":false,"savedAt":1}
 JSON
 
 for kind in stats settings session; do
@@ -52,7 +52,7 @@ ShellRoot {
   property int failures: 0
   property int attempts: 0
   readonly property var finalBinding: ({
-    id: "neovim/test",
+    id: "lazyvim/test",
     localId: "test",
     answer: {
       judgeMode: "text",
@@ -61,7 +61,7 @@ ShellRoot {
     }
   })
   readonly property var incompleteBinding: ({
-    id: "neovim/incomplete",
+    id: "lazyvim/incomplete",
     localId: "incomplete",
     answer: {
       judgeMode: "text",
@@ -82,7 +82,7 @@ ShellRoot {
     interval: 200; running: true; repeat: true
     onTriggered: {
       attempts += 1
-      if (overlay.profileId !== "neovim" || overlay.profileCounters().runs !== 1) {
+      if (overlay.profileId !== "lazyvim" || overlay.profileCounters().runs !== 1) {
         if (attempts < 30) return
         failures += 1
         console.error("MASTERY_TRANSITION_WRONG state did not load")
@@ -107,6 +107,10 @@ ShellRoot {
       pendingCounters.firstMasteryRun = 1
       pendingCounters.firstMasteryCelebrated = false
       overlay.eligibleBindings = [finalBinding, incompleteBinding]
+      overlay.resumeAvailable = overlay.hasResumableSession()
+      overlay.adoptRunState()
+      check("legacy session identity adopted", overlay.activeRunId, 17)
+      check("deck-local displayed run", overlay.runNumber, 2)
       overlay.view = "playing"
       overlay.refreshProgressCounts()
       check("incomplete total", overlay.progressCounts.total, 2)
@@ -128,7 +132,7 @@ ShellRoot {
         { binding: finalBinding, tier: "maintenance", queue: "maintenance", remedial: false }
       ]
       overlay.cardIndex = 0
-      overlay.runNumber = overlay.activeRunId
+      overlay.runNumber = overlay.nextRunNumber
       overlay.cardStartedAt = Date.now() - 500
       overlay.activeSegmentStartedAt = Date.now() - 1000
       overlay.view = "playing"
@@ -139,6 +143,7 @@ ShellRoot {
 
       var counters = overlay.profileCounters()
       check("view", overlay.view, "mastery")
+      check("exclusive overlay never opened", overlay.opened, false)
       check("cards remain", overlay.deck.length, 2)
       check("card index", overlay.cardIndex, 0)
       check("mastered after hit", overlay.progressCounts.mastered, 1)
@@ -166,11 +171,13 @@ ShellRoot {
 EOF
 
 output=$(
-  XDG_STATE_HOME="$test_root/state" \
+  HOME="$test_root/home" XDG_CONFIG_HOME="$test_root/home/.config" \
+  XDG_STATE_HOME="$test_root/state" XDG_CACHE_HOME="$test_root/cache" \
+  XDG_DATA_HOME="$test_root/data" \
   QT_QPA_PLATFORMTHEME= \
   QT_STYLE_OVERRIDE=Fusion \
   timeout 20s quickshell --no-color --path "$test_root/config/shell.qml" 2>&1
-)
+) || { printf '%s\n' "$output" >&2; exit 1; }
 
 if ! grep -Fq -- "MASTERY_TRANSITION_OK" <<<"$output"; then
   grep -E "MASTERY_TRANSITION" <<<"$output" >&2 || printf '%s\n' "$output" >&2
@@ -181,5 +188,19 @@ if [[ -e $test_root/state/omarchy/keycade/session.json ]]; then
   printf 'MASTERY_TRANSITION_FAILED: resumable session survived 100%%\n' >&2
   exit 1
 fi
+
+python3 - "$test_root/state/omarchy/keycade/stats.json" <<'PY'
+import json, sys
+from pathlib import Path
+stats = json.loads(Path(sys.argv[1]).read_text("utf-8"))
+entry = stats["bindings"]["lazyvim/test"]
+assert stats["schemaVersion"] == 5 and "profiles" not in stats, stats
+counters = stats["decks"]["all"]
+assert entry["state"] == "mastered" and entry["successfulRuns"] == [1, 17], entry
+assert stats["runSequence"] == 17, stats
+assert counters["runs"] == 2 and counters["firstMasteryRun"] == 2, counters
+assert counters["firstMasteryCelebrated"] and counters["firstMasteryAt"] > 0, counters
+assert counters["totalTrainingMs"] >= 2000, counters
+PY
 
 printf 'mastery-transition QML integration test passed\n'

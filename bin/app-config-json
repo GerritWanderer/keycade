@@ -1,12 +1,13 @@
 #!/usr/bin/python3
-"""Emit what a training ground's own configuration says about itself.
+"""Emit what the training ground's own configuration says about itself.
 
-The tables Keycade deals for LazyVim and tmux are the upstream defaults,
-shipped with the plugin. This helper reads the small, fixed-shape part of a
-machine's configuration that says how those defaults were *changed*: which key
-every other binding hangs off, and - for LazyVim - which opt-in bundles are
-turned on, which upstream version is installed, and which top-level literal
-keymap calls add, replace or delete a binding.
+The table Keycade deals for LazyVim is the upstream defaults, shipped with
+the plugin. This helper reads the small, fixed-shape part of a machine's
+configuration that says how those defaults were *changed*: which key every
+other binding hangs off, which opt-in bundles are turned on, which upstream
+version is installed, and which top-level literal keymap calls add, replace
+or delete a binding. The same launch also reads Keycade's declarative decks.json
+without writing it, keeping absence distinct from a malformed configuration.
 
 What it will not do, in the words of the rule it lives under:
 
@@ -29,7 +30,6 @@ import argparse
 import json
 import os
 import re
-import shlex
 import stat
 import sys
 import unicodedata
@@ -47,6 +47,14 @@ MAX_BINDINGS = 128
 MAX_LHS_CHARS = 128
 MAX_DESC_CHARS = 512
 MAX_LINE_CHARS = 4096
+MAX_DECKS = 32
+MAX_DECK_NAME_CHARS = 48
+MAX_DECK_REJECTED = 100000
+DECK_ID = re.compile(r"^[a-z][a-z0-9-]{0,31}$")
+FORBIDDEN_KEYS = {"__proto__", "constructor", "prototype"}
+SEED_LIMITS = {"categories": (24, 32), "extras": (32, 128), "contexts": (8, 32)}
+# The checked-in JSON is the source of the compiled Packs.js, not user config.
+PACK_ROOT = Path(__file__).absolute().parent.parent
 TRAINED_MODES = {"n": "normal", "x": "visual", "v": "visual",
                  "o": "operator", "i": "insert"}
 
@@ -62,28 +70,14 @@ LEADER_MENTION = re.compile(
     r'\b(?:vim\.g(?:\.(?:mapleader|maplocalleader)|\s*\[)|'
     r'vim\.api\.nvim_set_var|vim\.cmd)'
 )
-TMUX_PREFIX_MENTION = re.compile(r'\bprefix2?\b')
-
-# Commands that can set the prefix somewhere this cannot follow. tmux accepts
-# any unambiguous prefix of a command name, so `if`, `run` and `sou` are the
-# same commands as their full spellings and have to be recognised as such.
-TMUX_DYNAMIC_COMMANDS = ("source-file", "source", "if-shell", "run-shell")
-
-
-def tmux_dynamic(token: str) -> bool:
-    if token.startswith("%"):
-        # %if / %elif / %else / %endif, and any other config-file directive:
-        # what runs inside one is decided when tmux reads it, not here.
-        return True
-    return len(token) >= 2 and any(name.startswith(token)
-                                   for name in TMUX_DYNAMIC_COMMANDS)
 
 
 def is_comment(line: str) -> bool:
     stripped = line.lstrip()
     return stripped.startswith("--") or stripped.startswith("#")
 
-# The whole contract, written out. Nothing else is opened.
+# The whole user-input contract, written out. The only additional read is the
+# fixed shipped pack asset in deck_vocabulary(), never another user input.
 FILES: dict[str, dict[str, list[str]]] = {
     "lazyvim": {
         # LazyVim's starter says options are loaded before lazy.nvim starts and
@@ -98,9 +92,7 @@ FILES: dict[str, dict[str, list[str]]] = {
         "lock": [".config/nvim/lazy-lock.json"],
         "keymaps": [".config/nvim/lua/config/keymaps.lua"],
     },
-    "tmux": {
-        "prefix": [".config/tmux/tmux.conf", ".tmux.conf"],
-    },
+    "keycade": {"decks": [".config/omarchy/keycade/decks.json"]},
 }
 
 
@@ -118,42 +110,59 @@ def sanitize_text(value: object, limit: int) -> str:
     return cleaned[:limit]
 
 
-def read_text(home: Path, relative: str) -> str | None:
-    """One regular file by descriptor-relative path, bounded, no symlinks."""
+def read_text(home: Path, relative: str, *, strict: bool = False,
+              max_bytes: int = MAX_FILE_BYTES) -> str | None:
+    """One regular file by descriptor-relative path, bounded, no symlinks.
+
+    Strict reads distinguish absence from unreadable/non-regular input. Walk
+    the absolute anchor too: an XDG_CONFIG_HOME ancestor can itself be a link.
+    Legacy calibration readers retain their missing/unreadable convention.
+    """
     parts = Path(relative).parts
-    if not parts or any(part in ("", ".", "..") for part in parts):
+    anchor = home.parts
+    if not parts or Path(relative).is_absolute() or not home.is_absolute() \
+            or any(part in ("", ".", "..") for part in parts + anchor[1:]):
+        if strict:
+            raise Skipped("unsafe-path")
         return None
     directory = -1
     try:
-        # Resolve every component beneath the already-open home. O_NOFOLLOW on
-        # only the final file is insufficient: ~/.config/nvim itself may be a
-        # link and would silently widen the fixed-path contract.
-        directory = os.open(home, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-        for part in parts[:-1]:
+        # O_NOFOLLOW on only the final file is insufficient: ~/.config/nvim
+        # itself may be a link and would widen the fixed-path contract.
+        directory = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        for part in anchor[1:] + parts[:-1]:
             child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
                             dir_fd=directory)
             os.close(directory)
             directory = child
         descriptor = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
                              dir_fd=directory)
-    except OSError:
+    except OSError as error:
         if directory >= 0:
             os.close(directory)
+        if strict and not isinstance(error, FileNotFoundError):
+            raise Skipped("unreadable") from None
         return None
     os.close(directory)
     try:
-        with os.fdopen(descriptor, "rb") as handle:
-            if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
-                return None
-            raw = handle.read(MAX_FILE_BYTES + 1)
+        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+            if strict:
+                raise Skipped("non-regular")
+            return None
+        with os.fdopen(descriptor, "rb", closefd=False) as handle:
+            raw = handle.read(max_bytes + 1)
     except OSError:
+        if strict:
+            raise Skipped("unreadable") from None
         return None
-    if len(raw) > MAX_FILE_BYTES:
-        raise Skipped(f"{relative} exceeds {MAX_FILE_BYTES} bytes")
+    finally:
+        os.close(descriptor)
+    if len(raw) > max_bytes:
+        raise Skipped("too-large" if strict else f"{relative} exceeds {max_bytes} bytes")
     try:
         return raw.decode("utf-8")
     except UnicodeDecodeError:
-        raise Skipped(f"{relative} is not UTF-8") from None
+        raise Skipped("invalid-utf8" if strict else f"{relative} is not UTF-8") from None
 
 
 def long_bracket(text: str, start: int) -> tuple[str, int] | None:
@@ -834,113 +843,202 @@ def read_leader(home: Path, files: list[str]) -> tuple[dict[str, str], dict[str,
     return options, skipped
 
 
-def tmux_logical_lines(text: str) -> list[str]:
-    """Join the simple backslash continuations accepted by tmux config."""
-    result: list[str] = []
-    pending = ""
-    for physical in text.splitlines():
-        line = pending + physical
-        stripped = line.rstrip()
-        slashes = len(stripped) - len(stripped.rstrip("\\"))
-        if slashes % 2:
-            pending = stripped[:-1] + " "
+def read_json(home: Path, relative: str, *, strict: bool = False,
+              missing: Any = None, max_bytes: int = MAX_FILE_BYTES) -> Any:
+    text = read_text(home, relative, strict=strict, max_bytes=max_bytes)
+    if text is None:
+        return missing
+    try:
+        # Python otherwise accepts NaN/Infinity, which JSON.parse does not.
+        def reject_constant(value: str) -> None:
+            raise ValueError(value)
+        return json.loads(text, parse_constant=reject_constant)
+    except (ValueError, RecursionError):
+        raise Skipped("invalid-json" if strict else f"{relative} is not valid JSON") from None
+
+
+def deck_name(value: str) -> str:
+    """Strip terminal sequences, C0/C1, bidi and lone surrogates, then cap.
+
+    Same scanner as DeckValidation.safeName: ESC has zero or more 0x20..0x2f
+    intermediates and a 0x30..0x7e final (including ESC7, ESC=, ESCc, ESC#8).
+    CSI consumes parameters/intermediates through its 0x40..0x7e final. String
+    controls consume through ST (OSC also BEL). CAN/SUB cancel a sequence;
+    another ESC restarts a non-string sequence. Malformed bytes are discarded
+    within a sequence, and truncated sequences/strings discard to end-of-input
+    rather than exposing their command bytes. Nothing executes terminal code.
+    """
+    text = []
+    state = "text"
+    intermediate = False
+    string_bel = False
+    string_escape = False
+    for char in value:
+        code = ord(char)
+        if state != "text":
+            if code in (0x18, 0x1a):
+                state = "text"
+                continue
+            if state == "string":
+                if code == 0x9c or (string_escape and char == "\\") \
+                        or (string_bel and code == 0x07):
+                    state = "text"
+                string_escape = code == 0x1b
+                continue
+            if code == 0x1b:
+                state, intermediate = "escape", False
+                continue
+            if code == 0x9b:
+                state = "csi"
+                continue
+            if code in (0x90, 0x98, 0x9d, 0x9e, 0x9f):
+                state, string_bel, string_escape = "string", code == 0x9d, False
+                continue
+            if code <= 0x1f or code == 0x7f:
+                continue
+            if state == "csi":
+                if 0x40 <= code <= 0x7e:
+                    state = "text"
+            elif not intermediate and char == "[":
+                state = "csi"
+            elif not intermediate and char in "]PX^_":
+                state, string_bel, string_escape = "string", char == "]", False
+            elif 0x20 <= code <= 0x2f:
+                intermediate = True
+            elif 0x30 <= code <= 0x7e:
+                state = "text"
             continue
-        result.append(line)
-        pending = ""
-    if pending:
-        result.append(pending)
+        if code == 0x1b:
+            state, intermediate = "escape", False
+        elif code == 0x9b:
+            state = "csi"
+        elif code in (0x90, 0x98, 0x9d, 0x9e, 0x9f):
+            state, string_bel, string_escape = "string", code == 0x9d, False
+        else:
+            text.append(char)
+    value = "".join(text)
+    value = re.sub(r"[\x00-\x1f\x7f-\x9f\u061c\u200e\u200f\u2028-\u202e\u2066-\u206f\ud800-\udfff]", "", value)
+    return value[:MAX_DECK_NAME_CHARS]
+
+
+def deck_result(status: str, reason: str = "", *, decks: list | None = None,
+                rejected: int = 0) -> dict[str, Any]:
+    """Transport contract, also independently rebuilt by DeckValidation.js.
+
+    absent -> starters later; invalid -> all only later; valid (even []) ->
+    replace starters later. No implicit all/starter or membership is emitted.
+    Seed omission, {} and explicit empty dimensions remain distinguishable.
+    'all' retains only its name. Reasons are fixed tokens, never user text.
+    Rejections count unknown keys, invalid/duplicate items and capped entries.
+    """
+    return {"schemaVersion": 1, "status": status, "reason": reason,
+            "decks": decks or [], "rejected": min(MAX_DECK_REJECTED, rejected)}
+
+
+def deck_vocabulary() -> dict[str, set[str]]:
+    """Use the real shipped pack, never a second copied vocabulary or Lua.
+
+    Pack contexts are the build-time subset of Profiles.contexts('lazyvim');
+    the consumer additionally checks the live static profile declaration.
+    This larger budget applies ONLY to this fixed application asset.
+    """
+    pack = read_json(PACK_ROOT, "assets/packs/lazyvim.json", strict=True,
+                     max_bytes=MAX_PAYLOAD_BYTES)
+    if not isinstance(pack, dict) or pack.get("profile") != "lazyvim" \
+            or pack.get("schemaVersion") != 1:
+        raise Skipped("vocabulary-unavailable")
+    result: dict[str, set[str]] = {}
+    for key, (_, chars) in SEED_LIMITS.items():
+        values = pack.get(key)
+        if not isinstance(values, list) or len(values) > MAX_EXTRAS \
+                or any(not isinstance(value, str) or not 0 < len(value) <= chars
+                       or value in FORBIDDEN_KEYS or has_controls(value) for value in values):
+            raise Skipped("vocabulary-unavailable")
+        result[key] = set(values)
     return result
 
 
-def tmux_assignment(line: str) -> tuple[str, str | None] | None:
-    """One global literal set/set-option, tokenized without a shell."""
-    try:
-        tokens = shlex.split(line, comments=True, posix=True)
-    except ValueError:
-        return None
-    if not tokens or tokens[0] not in ("set", "set-option"):
-        return None
-    option_at = next((index for index, token in enumerate(tokens[1:], 1)
-                      if token in ("prefix", "prefix2")), -1)
-    if option_at < 0 or len(tokens) != option_at + 2:
-        return None
-    flags = tokens[1:option_at]
-    letters = "".join(flag[1:] for flag in flags if flag.startswith("-") and len(flag) > 1)
-    if len(flags) != sum(1 for flag in flags if flag.startswith("-") and len(flag) > 1) \
-            or "g" not in letters or any(letter not in "gq" for letter in letters):
-        return None
-    name, value = tokens[option_at], tokens[option_at + 1]
-    if value.lower() == "none" and name == "prefix2":
-        return name, None
-    try:
-        return name, option_value(value)
-    except Skipped:
-        return None
+def read_decks(home: Path, files: list[str]) -> dict[str, Any]:
+    """Read-only D1/D2 boundary. Never execute config or confuse null/absence.
 
-
-def read_tmux_prefix(home: Path, files: list[str]) -> tuple[dict[str, str], dict[str, str]]:
-    """`set -g prefix C-Space`, and the spare beside it.
-
-    The prefix is what a card shows; prefix2 is what it also accepts, because
-    tmux fires on either and marking one wrong would teach something untrue.
+    XDG_CONFIG_HOME is absolute by specification. An invalid/non-readable XDG
+    path is an invalid config, not permission to silently read another file.
     """
-    found: dict[str, str | None] = {}
-    mentioned: set[str] = set()
-    uncertain = False
-    uncertainty = "configuration may set prefix dynamically"
-    for relative in files:
-        text = read_text(home, relative)
-        if text is None:
-            continue
-        file_found: dict[str, str | None] = {}
-        for line in tmux_logical_lines(text):
-            if is_comment(line) or not line.strip():
-                continue
-            try:
-                head = shlex.split(line, comments=True, posix=True)
-            except ValueError:
-                head = []
-            if head and tmux_dynamic(head[0]):
-                uncertain = True
-                continue
-            assignment = tmux_assignment(line)
-            if assignment:
-                mentioned.add(assignment[0])
-                file_found[assignment[0]] = assignment[1]
-            elif head and head[0] in ("set", "set-option") \
-                    and TMUX_PREFIX_MENTION.search(line):
-                for name in ("prefix", "prefix2"):
-                    if re.search(rf"\b{name}\b", line):
-                        mentioned.add(name)
-                uncertain = True
-        for name, value in file_found.items():
-            if name in found and found[name] != value:
-                uncertain = True
-                uncertainty = "fixed config files disagree"
-            else:
-                found[name] = value
-
-    options: dict[str, str] = {}
-    skipped: dict[str, str] = {}
-    if uncertain:
-        return {}, {"prefix": uncertainty, "prefix2": uncertainty}
-    for name in ("prefix", "prefix2"):
-        if name in found and found[name] is not None:
-            options[name] = str(found[name])
-        elif name == "prefix" and name not in mentioned:
-            skipped[name] = "never set"
-        # A machine with no prefix2 is the normal case, not a failure to read.
-    return options, skipped
-
-
-def read_json(home: Path, relative: str) -> Any:
-    text = read_text(home, relative)
-    if text is None:
-        return None
+    absent = object()
     try:
-        return json.loads(text)
-    except ValueError:
-        raise Skipped(f"{relative} is not valid JSON") from None
+        config_home = os.environ.get("XDG_CONFIG_HOME", "")
+        if config_home:
+            if not config_home.startswith("/") or len(config_home) > 4096 \
+                    or has_controls(config_home) or ".." in Path(config_home).parts:
+                return deck_result("invalid", "unsafe-config-home", rejected=1)
+            anchor = Path(config_home)
+            relative = "omarchy/keycade/decks.json"
+        else:
+            anchor, relative = home, files[0]
+        value = read_json(anchor, relative, strict=True, missing=absent)
+        if value is absent:
+            return deck_result("absent")
+        if not isinstance(value, dict) or type(value.get("schemaVersion")) is not int \
+                or value["schemaVersion"] != 1 or not isinstance(value.get("decks"), list):
+            return deck_result("invalid", "invalid-schema", rejected=1)
+        vocabulary = deck_vocabulary()
+    except Skipped as error:
+        return deck_result("invalid", str(error), rejected=1)
+
+    rejected = len(value.keys() - {"schemaVersion", "decks"})
+    declarations = value["decks"]
+    rejected += max(0, len(declarations) - MAX_DECKS)
+    seen: set[str] = set()
+    decks = []
+    for item in declarations[:MAX_DECKS]:
+        if not isinstance(item, dict):
+            rejected += 1
+            continue
+        rejected += len(item.keys() - {"id", "name", "seed"})
+        deck_id = item.get("id")
+        if not isinstance(deck_id, str) or not DECK_ID.fullmatch(deck_id) \
+                or deck_id in FORBIDDEN_KEYS or deck_id in seen:
+            rejected += 1
+            continue
+        # Reserve the first declaration even if another field is malformed.
+        seen.add(deck_id)
+        name = deck_name(item["name"]) if isinstance(item.get("name"), str) else ""
+        if not name.strip():
+            rejected += 1
+            continue
+        deck = {"id": deck_id, "name": name}
+        if "seed" in item and deck_id != "all":
+            seed = item["seed"]
+            if not isinstance(seed, dict):
+                rejected += 1
+                continue
+            rejected += len(seed.keys() - SEED_LIMITS.keys())
+            accepted_seed = {}
+            for key, (count, chars) in SEED_LIMITS.items():
+                if key not in seed:
+                    continue
+                values = seed[key]
+                accepted = []
+                if not isinstance(values, list):
+                    rejected += 1
+                else:
+                    rejected += max(0, len(values) - count)
+                    for name in values[:count]:
+                        if not isinstance(name, str) or not 0 < len(name) <= chars \
+                                or name in FORBIDDEN_KEYS or name not in vocabulary[key] \
+                                or name in accepted:
+                            rejected += 1
+                        else:
+                            accepted.append(name)
+                # Preserve []: unknown values must not widen a seed by turning
+                # a specified (but rejected) dimension into an omitted one.
+                accepted_seed[key] = accepted
+            deck["seed"] = accepted_seed
+        decks.append(deck)
+    result = deck_result("valid", decks=decks, rejected=rejected)
+    if len(json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8")) > MAX_FILE_BYTES:
+        return deck_result("invalid", "too-large", rejected=rejected + 1)
+    return result
 
 
 def read_extras(home: Path, files: list[str]) -> tuple[list[str], dict[str, str]]:
@@ -989,23 +1087,20 @@ def snapshot(profile: str, home: Path) -> dict[str, Any]:
         except Skipped as error:
             return None, {"file": sanitize_text(str(error), 128)}
 
-    if profile == "lazyvim":
-        found, reasons = attempt(read_leader, home, files["leader"])
-        options.update(found or {})
-        skipped.update(reasons)
-        found, reasons = attempt(read_extras, home, files["extras"])
-        extras = found or []
-        skipped.update(reasons)
-        found, reasons = attempt(read_lock, home, files["lock"])
-        upstream = found or {}
-        skipped.update(reasons)
-        found, reasons = attempt(read_keymaps, home, files["keymaps"])
-        bindings = found or []
-        binding_skipped = reasons
-    else:
-        found, reasons = attempt(read_tmux_prefix, home, files["prefix"])
-        options.update(found or {})
-        skipped.update(reasons)
+    # LazyVim is the only profile left, and the only ground whose
+    # configuration this knows the shape of.
+    found, reasons = attempt(read_leader, home, files["leader"])
+    options.update(found or {})
+    skipped.update(reasons)
+    found, reasons = attempt(read_extras, home, files["extras"])
+    extras = found or []
+    skipped.update(reasons)
+    found, reasons = attempt(read_lock, home, files["lock"])
+    upstream = found or {}
+    skipped.update(reasons)
+    found, reasons = attempt(read_keymaps, home, files["keymaps"])
+    bindings = found or []
+    binding_skipped = reasons
 
     return {
         "schemaVersion": SCHEMA_VERSION,
@@ -1015,6 +1110,7 @@ def snapshot(profile: str, home: Path) -> dict[str, Any]:
         "upstream": upstream,
         "bindings": bindings,
         "bindingSkipped": binding_skipped,
+        "deckConfig": read_decks(home, FILES["keycade"]["decks"]),
         # Every value this could not read, and why. A skipped value is visible
         # in the interface; a guessed one would not be.
         "skipped": skipped,
@@ -1033,7 +1129,7 @@ def resolved_home(value: str | None) -> Path:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--profile", choices=sorted(FILES), required=True)
+    parser.add_argument("--profile", choices=["lazyvim"], required=True)
     parser.add_argument("--home", default=None,
                         help="read under this directory instead of $HOME (tests)")
     arguments = parser.parse_args()
@@ -1044,7 +1140,9 @@ def main() -> None:
         payload = {"schemaVersion": SCHEMA_VERSION, "type": "error",
                    "error": sanitize_text(type(error).__name__, 128)}
 
-    text = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+    # ASCII escapes keep UTF-8 code points from being split by the consumer's
+    # incremental raw-chunk parser. The byte budget applies after escaping.
+    text = json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
     if len(text.encode("utf-8")) > MAX_PAYLOAD_BYTES:
         text = json.dumps({"schemaVersion": SCHEMA_VERSION, "type": "error",
                            "error": "payload exceeds its limit"})

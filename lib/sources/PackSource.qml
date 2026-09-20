@@ -3,15 +3,13 @@ import "../Packs.js" as Packs
 import "../Profiles.js" as Profiles
 import "../TextKey.js" as TextKey
 
-// The source every pack-backed training ground shares. A pack is the upstream's
-// own published key table, compiled into lib/Packs.js by tools/build_packs.py
-// and shipped with the plugin.
+// The compiled LazyVim supply: the upstream's own published key table,
+// compiled into lib/Packs.js by tools/build_packs.py and shipped with the plugin.
 //
 // Nothing here reaches outside the plugin: no file is read, no process is
 // started, no socket is opened, nothing is fetched. That is the point of a
-// pack rather than a reader for the application's own configuration - see
-// docs/app-profile-extension-plan.md section 5 for why this ground gets its
-// table from upstream while the Hyprland ground reads the machine.
+// pack rather than a reader for the application's own configuration. The
+// bounded AppConfigSource separately supplies calibration, never a new table.
 //
 // The table was already bounded when it was built. It is bounded again here,
 // on its own, because "the generator checked it" is not a property this side
@@ -21,8 +19,7 @@ Item {
 
   property string profileId: ""
   // The ground's configurable keys, by the names its profile declares:
-  // { leader: " ", localleader: "\\" } for LazyVim, { prefix: "C-b" } for
-  // tmux. They are configuration in the application being trained, not keys, so
+  // { leader: " ", localleader: "\\" } for LazyVim. These are configuration, so
   // someone who moved theirs trains the mapping rather than a key they never
   // press. Anything absent here falls back to the profile's own default.
   property var options: ({})
@@ -30,11 +27,8 @@ Item {
   // named them. An entry provided only by a bundle that is off is not dealt:
   // teaching a plugin nobody installed is worse than teaching nothing.
   property var enabledExtras: []
-  // Literal mappings this machine added, replaced or deleted. Empty for every
-  // ground except LazyVim; keeping it on the shared loader makes the merge a
-  // property of a pack rather than a branch in the game.
+  // Literal mappings this machine added, replaced or deleted.
   property var overrides: []
-  property var packOverride: null
 
   readonly property int maxBindings: 512
   readonly property int maxSteps: 8
@@ -50,9 +44,8 @@ Item {
   property string sourceLabel: ""
   property bool loading: false
   property string error: ""
-  // Entries the pack carried that this side refused. Surfaced for the same
-  // reason the Hyprland source surfaces its own: a dropped entry has to be
-  // observable rather than quietly missing from training.
+  // Entries the pack carried that this side refused. A dropped entry has to
+  // be observable rather than quietly missing from training.
   property int rejected: 0
   // Entries this table carries for bundles this machine has not turned on.
   // Not a rejection - they are simply not here.
@@ -141,8 +134,7 @@ Item {
     var category = root.safeText(record.category, 32)
     var context = root.safeText(record.context, 32)
     if (!localId || !description || categories.indexOf(category) === -1) return null
-    // The modes a card can pose belong to the ground, not to this loader. The
-    // first pack's were Neovim's; the second's are not.
+    // Validate the card's mode against the LazyVim supply's declared contexts.
     if (Profiles.contexts(root.profileId).indexOf(context) === -1) return null
     if (!Array.isArray(record.steps) || !record.steps.length
         || record.steps.length > root.maxSteps) return null
@@ -158,8 +150,7 @@ Item {
     if (providers.length && !root.anyEnabled(providers)) return "disabled"
     var steps = root.resolvedSteps(record.steps)
     if (!steps) return null
-    // The other ways in - tmux's prefix2, say. One whose option is unset
-    // resolves to nothing and is simply not offered.
+    // An alternate whose option is unset resolves to nothing and is not offered.
     var alternates = []
     var primaryKey = JSON.stringify(steps)
     var alternateKeys = root.safeMap()
@@ -282,28 +273,17 @@ Item {
     root.customDeleted = 0
     root.customSkipped = 0
     root.bindings = []
-    if (!Profiles.isPack(root.profileId)) {
+    if (root.profileId !== "lazyvim" || !Profiles.isPack(root.profileId)) {
       root.fail("Unknown pack profile")
       return
     }
-    var liveOverride = root.packOverride !== null && root.packOverride !== undefined
-    var pack = liveOverride ? root.packOverride : Packs.pack(root.profileId)
+    var pack = Packs.pack(root.profileId)
     if (!pack || pack.schemaVersion !== 1 || pack.profile !== root.profileId
         || pack.judgeMode !== "text" || !Array.isArray(pack.bindings)) {
-      if (liveOverride) {
-        root.packOverride = null
-        root.refresh()
-        return
-      }
       root.fail("Unsupported pack schema")
       return
     }
     if (pack.bindings.length > root.maxBindings) {
-      if (liveOverride) {
-        root.packOverride = null
-        root.refresh()
-        return
-      }
       root.fail("Pack exceeded its entry limit")
       return
     }
@@ -318,11 +298,6 @@ Item {
     var categories = root.acceptedCategories(
         Array.isArray(pack.categories) ? pack.categories : root.packCategories(pack))
     if (!categories) {
-      if (liveOverride) {
-        root.packOverride = null
-        root.refresh()
-        return
-      }
       root.fail("Pack categories exceeded their limits")
       return
     }
@@ -338,14 +313,6 @@ Item {
       if (accepted.length >= root.maxBindings) { refused += 1; continue }
       seen[item.id] = true
       accepted.push(item)
-    }
-    // A live table is optional calibration. If every record was unreadable,
-    // an empty cabinet would be a silent failure; reload the reviewed fallback
-    // instead. A malformed live top level takes the same path above.
-    if (liveOverride && !accepted.length) {
-      root.packOverride = null
-      root.refresh()
-      return
     }
     root.bindings = accepted
     root.rejected = refused

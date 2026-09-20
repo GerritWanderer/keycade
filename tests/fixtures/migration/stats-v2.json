@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 2,
+  "runs": 17,
+  "coverageCursor": 9,
+  "totalTrainingMs": 123456,
+  "firstMasteryAt": 1700000000000,
+  "firstMasteryRun": 14,
+  "firstMasteryCelebrated": true,
+  "bindings": {
+    "64|Q|killactive|": {
+      "state": "mastered",
+      "guidedCompleted": true,
+      "dueAt": 1700086400000,
+      "dueRun": 9,
+      "intervalStep": 2,
+      "firstTryAttempts": 5,
+      "firstTryCorrect": 4,
+      "recentFirstTry": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ],
+      "reactions": [
+        1801,
+        1401,
+        1201,
+        1001
+      ],
+      "successfulRuns": [
+        3,
+        4,
+        6
+      ],
+      "lastSuccessfulRun": 6,
+      "lastSeenAt": 1699900000001,
+      "lapseCount": 1
+    }
+  }
+}

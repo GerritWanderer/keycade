@@ -4,7 +4,7 @@
   "name": "Keycade",
   "version": "1.0.1",
   "author": "luneth90",
-  "description": "A shortcut recall arcade for Omarchy, herdr, tmux, Vim, Neovim and LazyVim — six cabinets, each with its own deck, progress and mastery.",
+  "description": "An arcade-style LazyVim shortcut recall trainer for Omarchy (Wayland) — your own decks, each with its own progress and mastery.",
   "kinds": [
     "overlay"
   ],

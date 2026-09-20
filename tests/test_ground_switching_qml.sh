@@ -1,15 +1,9 @@
 #!/usr/bin/bash
 
-# Picking a training ground is asynchronous now: a pack ground reads the
-# machine's own configuration through a subprocess before its table can be
-# built. Switching cabinets faster than that answered counted the ground
-# before it - LazyVim showed tmux's total under LazyVim's name - and nothing
-# recomputed it afterwards, so the wrong number stayed.
-#
-# Nothing in the offscreen suite can see that: it is the overlay's own wiring
-# between three asynchronous sources. This drives the real component against
-# the real compositor, clicks through the cabinets faster than they can load,
-# and checks that each one ends up counting itself.
+# The retired cabinets are gone, but loading is still asynchronous: the bounded
+# config reader calibrates the compiled LazyVim supply. Exercise repeated reads,
+# extras, literal overrides, leader calibration and exclusions through the real
+# overlay wiring. Never open the exclusive overlay or read personal config.
 
 set -euo pipefail
 
@@ -24,78 +18,52 @@ cleanup() {
 trap cleanup EXIT
 
 if [[ -z ${WAYLAND_DISPLAY:-} ]]; then
-  printf 'ground-switching test skipped: no Wayland display\n'
+  printf 'ground-loading test skipped: no Wayland display\n'
   exit 0
 fi
 
-mkdir -p -- "$test_root/config" "$test_root/state"
+mkdir -p -- "$test_root/config" "$test_root/state" "$test_root/home/.config/nvim/lua/config"
 cp -r -- "$repo_root" "$test_root/config/keycade"
 rm -rf -- "$test_root/config/keycade/.git"
 
-# The counts each ground is expected to reach are read from the shipped tables
-# rather than written here, so a table that grows does not fail this.
-counts=$(python3 - "$test_root/config/keycade" <<'PY'
-import json, re, subprocess, sys
+# Expected counts come from the unchanged shipped table and synthetic config,
+# never from the source under test or the maintainer's local configuration.
+expected=$(python3 - "$test_root/config/keycade" "$test_root" <<'PY'
+import json, sys
 from pathlib import Path
-root = Path(sys.argv[1])
-sys.path.insert(0, str(root / "tools"))
-import build_packs
-packs = {name: json.loads((root / "assets/packs" / f"{name}.json").read_text("utf-8"))
-         for name in ("lazyvim", "tmux", "vim", "neovim")}
-lazy_config = json.loads(subprocess.run(
-    [str(root / "bin/app-config-json"), "--profile", "lazyvim"],
-    capture_output=True, text=True).stdout)
-# Mirror the source-ordered overlay used by PackSource. This keeps the
-# integration check valid on a maintainer machine that has extras or literal
-# keymap overrides of its own.
-lazy_records = [dict(entry) for entry in packs["lazyvim"]["bindings"]]
-lazy_by_id = {re.sub(r"<[^<>]*>", lambda m: m.group(0).lower(), entry["localId"]): index
-               for index, entry in enumerate(lazy_records)}
-lazy_deleted = set()
-for change in lazy_config.get("bindings", []):
-    try:
-        build_packs.parse_notation(change["lhs"])
-    except (KeyError, build_packs.Rejected):
-        continue
-    for context in change.get("contexts", []):
-        # Mirrors TextKey.canonicalNotation: Vim reads <Leader> and <leader> as
-        # one key, so the overlay merges on that spelling and so does this.
-        local_id = re.sub(r"<[^<>]*>", lambda m: m.group(0).lower(),
-                          f"{context}/{change['lhs']}")
-        position = lazy_by_id.get(local_id)
-        if change.get("op") == "del":
-            if position is not None:
-                lazy_deleted.add(local_id)
-            continue
-        replacement = {
-            "localId": local_id, "context": context, "extras": [],
-        }
-        if position is None:
-            lazy_by_id[local_id] = len(lazy_records)
-            lazy_records.append(replacement)
-        else:
-            lazy_records[position] = {**lazy_records[position], **replacement}
-        lazy_deleted.discard(local_id)
-enabled_extras = set(lazy_config.get("extras", []))
-lazyvim = sum(1 for entry in lazy_records
-              if entry["localId"] not in lazy_deleted
-              and (not entry.get("extras")
-                   or enabled_extras.intersection(entry["extras"])))
-herdr = json.loads(subprocess.run([str(root / "bin/herdr-keys-json")],
-                                  capture_output=True, text=True).stdout)
-tmux_live = json.loads(subprocess.run([str(root / "bin/tmux-keys-json")],
-                                     capture_output=True, text=True).stdout)
-tmux_count = (len(tmux_live.get("bindings", [])) if tmux_live.get("available")
-              else len(packs["tmux"]["bindings"]))
-print(lazyvim, tmux_count, len(packs["vim"]["bindings"]),
-      len(packs["neovim"]["bindings"]), len(herdr.get("bindings", [])))
+root, out = Path(sys.argv[1]), Path(sys.argv[2])
+pack = json.loads((root / "assets/packs/lazyvim.json").read_text("utf-8"))
+extra = "lazyvim.plugins.extras.editor.harpoon2"
+assert extra in pack["extras"]
+active = {entry["localId"] for entry in pack["bindings"]
+          if not entry["extras"] or extra in entry["extras"]}
+assert "normal/gZ" not in active
+assert {"normal/<leader>ff", "normal/<C-h>", "normal/<C-j>"} <= active
+active.remove("normal/<C-h>")
+active.add("normal/gZ")
+active.remove("normal/<C-j>")
+config = out / "home/.config/nvim"
+(config / "lazyvim.json").write_text(json.dumps({"extras": [extra]}), "utf-8")
+(config / "lua/config/options.lua").write_text('vim.g.mapleader = ","\n', "utf-8")
+(config / "lua/config/keymaps.lua").write_text('''vim.keymap.set("n", "<leader>ff", "<cmd>Files<cr>", { desc = "My file picker" })
+vim.keymap.del("n", "<C-h>")
+vim.keymap.set("n", "gZ", "<cmd>Custom<cr>", { desc = "My command" })
+''', "utf-8")
+(out / "settings.json").write_text(json.dumps({
+    "schemaVersion": 3, "activeProfile": "tmux", "locale": "en",
+    "feedbackSound": False, "countdownSound": False,
+    "excludedBindings": ["lazyvim:normal/<C-j>", "tmux:prefix/x"],
+}) + "\n", "utf-8")
+(out / "stats.json").write_text(json.dumps({
+    "schemaVersion": 4, "bindings": {}, "profiles": {"lazyvim": {"runs": 2}},
+}) + "\n", "utf-8")
+print(len(active))
 PY
 )
-read -r expect_lazyvim expect_tmux expect_vim expect_neovim expect_herdr <<<"$counts"
-if [[ $expect_herdr == 0 ]]; then
-  printf 'ground-switching test skipped: herdr keybindings are not readable here\n'
-  exit 0
-fi
+for kind in settings stats; do
+  XDG_STATE_HOME="$test_root/state" "$repo_root/bin/state-store" write "$kind" \
+    < "$test_root/$kind.json" > /dev/null
+done
 
 cat > "$test_root/config/shell.qml" <<EOF
 import QtQuick
@@ -104,70 +72,109 @@ import "keycade" as Keycade
 
 ShellRoot {
   Keycade.Keycade { id: overlay }
-  readonly property var expected: ({
-    "lazyvim": $expect_lazyvim, "tmux": $expect_tmux,
-    "vim": $expect_vim, "neovim": $expect_neovim, "herdr": $expect_herdr
-  })
-  // Picked faster than any of them can load, which is the whole point.
-  readonly property var rush: ["lazyvim", "vim", "tmux", "neovim", "herdr",
-                               "lazyvim", "herdr", "vim", "tmux", "lazyvim"]
-  readonly property var settled: ["tmux", "herdr", "vim", "neovim", "lazyvim"]
-  property int rushStep: 0
-  property int settledStep: 0
+  readonly property int expected: $expected
+  property int phase: 0
+  property int refreshes: 0
   property int failures: 0
 
-  function check(id) {
-    var actual = overlay.eligibleBindings.length
-    if (actual !== expected[id]) {
+  function check(label, actual, expectedValue) {
+    if (actual !== expectedValue) {
       failures += 1
-      console.error("GROUND_SWITCH_WRONG " + id + " counted " + actual
-                    + " instead of " + expected[id])
+      console.error("GROUND_LOADING_WRONG " + label + " was " + actual
+                    + " instead of " + expectedValue)
+    }
+  }
+
+  function checkSupply(total) {
+    check("only available supply", overlay.availableProfiles.join(","), "lazyvim")
+    check("retired saved selection ignored", overlay.profileId, "lazyvim")
+    check("total", overlay.eligibleBindings.length, total)
+    check("progress total", overlay.progressCounts.total, total)
+    check("home stays visible", overlay.view, "home")
+    check("exclusive overlay never opened", overlay.opened, false)
+    check("leader calibration", overlay.profileOptions().leader, ",")
+    check("custom added", overlay.activeSource.customAdded, 1)
+    check("custom changed", overlay.activeSource.customChanged, 1)
+    check("custom deleted", overlay.activeSource.customDeleted, 1)
+    check("custom skipped", overlay.activeSource.customSkipped, 0)
+    check("foreign exclusions inert", overlay.staleExcludedCount, 0)
+    for (var i = 0; i < overlay.eligibleBindings.length; i++) {
+      var item = overlay.eligibleBindings[i]
+      check("LazyVim namespace", item.id.indexOf("lazyvim/"), 0)
+      check("text judging", item.answer.judgeMode, "text")
+      if (item.localId === "normal/<leader>ff") {
+        check("overridden description", overlay.actionName(item), "My file picker")
+        check("resolved leader", item.answer.steps[0].text, ",")
+      }
     }
   }
 
   Timer {
-    interval: 250; running: true; repeat: true
+    interval: 40; running: true; repeat: true
     onTriggered: {
-      if (rushStep >= rush.length) { running = false; afterRush.start(); return }
-      overlay.selectProfile(rush[rushStep]); rushStep += 1
-    }
-  }
-  Timer {
-    id: afterRush; interval: 3000; repeat: false
-    onTriggered: { check(rush[rush.length - 1]); slow.start() }
-  }
-  // Then one at a time, with room to land, so a ground that only ever counts
-  // itself under pressure is not mistaken for one that always does.
-  Timer {
-    id: slow; interval: 3000; repeat: true
-    onTriggered: {
-      if (settledStep > 0) check(settled[settledStep - 1])
-      if (settledStep >= settled.length) {
-        running = false
-        console.log(failures ? "GROUND_SWITCH_FAILED" : "GROUND_SWITCH_OK")
-        Qt.quit()
-        return
+      if (phase === 0) {
+        // This counter is a readiness sentinel from the isolated StateStore.
+        if (overlay.profileCounters().runs !== 2) return
+        overlay.view = "home"
+        overlay.loadActiveGround()
+        check("loading announced", overlay.groundLoading, true)
+        phase = 1
+      } else if (phase === 1) {
+        // Force the reader's pending/restart path as well as ordinary loads.
+        overlay.loadActiveGround()
+        refreshes += 1
+        if (refreshes === 8) phase = 2
+      } else if (!overlay.groundLoading) {
+        checkSupply(phase === 2 ? expected : expected + 1)
+        if (phase === 2) {
+          check("excluded row", overlay.excludedRows.length, 1)
+          overlay.restoreBinding("normal/<C-j>")
+          check("restore changes the denominator", overlay.progressCounts.total, expected + 1)
+          check("restore empties live exclusions", overlay.excludedRows.length, 0)
+          overlay.loadActiveGround()
+          phase = 3
+        } else {
+          running = false
+          done.start()
+        }
       }
-      overlay.selectProfile(settled[settledStep]); settledStep += 1
     }
   }
   Timer {
-    interval: 55000; running: true; repeat: false
-    onTriggered: { console.error("GROUND_SWITCH_FAILED: timeout"); Qt.quit() }
+    id: done; interval: 1000; repeat: false
+    onTriggered: {
+      console.log(failures ? "GROUND_LOADING_FAILED" : "GROUND_LOADING_OK")
+      Qt.quit()
+    }
+  }
+  Timer {
+    interval: 20000; running: true; repeat: false
+    onTriggered: { console.error("GROUND_LOADING_FAILED: timeout"); Qt.quit() }
   }
 }
 EOF
 
 output=$(
-  XDG_STATE_HOME="$test_root/state" \
-  QT_QPA_PLATFORMTHEME= \
-  QT_STYLE_OVERRIDE=Fusion \
-  timeout 70s quickshell --no-color --path "$test_root/config/shell.qml" 2>&1
-)
+  HOME="$test_root/home" XDG_CONFIG_HOME="$test_root/home/.config" \
+  XDG_STATE_HOME="$test_root/state" XDG_CACHE_HOME="$test_root/cache" \
+  XDG_DATA_HOME="$test_root/data" \
+  QT_QPA_PLATFORMTHEME= QT_STYLE_OVERRIDE=Fusion \
+  timeout 25s quickshell --no-color --path "$test_root/config/shell.qml" 2>&1
+) || { printf '%s\n' "$output" >&2; exit 1; }
 
-if ! grep -Fq -- "GROUND_SWITCH_OK" <<<"$output"; then
-  grep -E "GROUND_SWITCH" <<<"$output" >&2 || printf '%s\n' "$output" >&2
+if ! grep -Fq -- "GROUND_LOADING_OK" <<<"$output"; then
+  grep -E "GROUND_LOADING" <<<"$output" >&2 || printf '%s\n' "$output" >&2
   exit 1
 fi
 
-printf 'ground-switching QML integration test passed\n'
+python3 - "$test_root/state/omarchy/keycade/settings.json" <<'PY'
+import json, sys
+from pathlib import Path
+settings = json.loads(Path(sys.argv[1]).read_text("utf-8"))
+assert settings["excludedBindings"] == ["tmux:prefix/x"], settings
+# Every historical selector maps to all; foreign exclusions stay verbatim.
+assert settings["schemaVersion"] == 4 and settings["activeDeck"] == "all", settings
+assert "activeProfile" not in settings and settings["deckCards"] == {}, settings
+PY
+
+printf 'single-supply ground-loading QML integration test passed\n'

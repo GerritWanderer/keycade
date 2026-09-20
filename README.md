@@ -2,7 +2,7 @@
 
 **English** | [简体中文](README.zh-CN.md)
 
-> A shortcut recall arcade for Omarchy, herdr, tmux, Vim, Neovim, and LazyVim
+> An arcade-style LazyVim shortcut recall trainer for Omarchy (Wayland), driven by your own decks
 
 [![CI](https://github.com/luneth90/keycade/actions/workflows/ci.yml/badge.svg)](https://github.com/luneth90/keycade/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/luneth90/keycade/actions/workflows/codeql.yml/badge.svg)](https://github.com/luneth90/keycade/actions/workflows/codeql.yml)
@@ -13,57 +13,35 @@
 [![GitHub Release](https://img.shields.io/github/v/release/luneth90/keycade?logo=github)](https://github.com/luneth90/keycade/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-![Keycade English learning screen](docs/screenshots/keycade-en.png)
-
-![Every cabinet's progress on the home screen](docs/screenshots/keycade-grounds-en.png)
-
 ![A LazyVim leader sequence](docs/screenshots/keycade-lazyvim-en.png)
 
-Keycade is a native Omarchy desktop overlay that turns shortcut memorization into quick, arcade-style training runs. Keypresses are captured and judged locally through a Wayland inhibitor, never triggering desktop actions during a session.
+Keycade is a native Omarchy desktop overlay that turns LazyVim shortcut memorization into quick, arcade-style training runs. Keypresses are captured and judged locally through a Wayland inhibitor, never triggering desktop actions during a session.
 
-Six dedicated training grounds can be selected directly from the home screen, just like machines in an arcade. Each cabinet maintains its own card deck, learning curve, and mastery status:
-
-| Ground | Source of Shortcuts |
-| --- | --- |
-| **Omarchy** | Active desktop shortcuts read directly from the running compositor |
-| **herdr** | Active multiplexer bindings obtained from Omarchy's read-only listing |
-| **tmux** | Live server prefixes and key table; falls back to static config and standard table if offline |
-| **VIM** | Operators, motions, text objects, and compositions, verified against Neovim documentation |
-| **NEOVIM** | Built-in default keybindings collected from a clean Neovim instance |
-| **LazyVim** | Official keymaps calibrated automatically to your leader key, enabled extras, and overrides |
-
-Omarchy is selected by default on a fresh install or update; all other grounds are just one click away.
+The training corpus is the official LazyVim key table, calibrated automatically to your leader keys, enabled extras, and `lua/config/keymaps.lua` overrides. Your study scope is a **deck**: the reserved `all` deck containing every eligible card, the four shipped starter decks, or collections you declare yourself in `decks.json`. Each deck keeps its own card counts, run counters, and mastery status, while per-card recall history stays shared across decks.
 
 ## Core Features
 
-- **Machine-Aware & Reference Tables**: The first three grounds inspect your active system and live server state; the other three draw from upstream-verified reference tables.
-- **Multi-Key Sequences**: Supports complex sequences (`<leader>ff`, `gcc`, `C-b %`) as seamlessly as single chords, providing step-by-step visual feedback as you type.
+- **Calibrated LazyVim Corpus**: The official key table, adjusted live to your `mapleader`/`maplocalleader`, enabled `lazyvim.json` extras, and literal `keymaps.lua` overrides — no manual setup.
+- **Your Own Decks**: Declare named decks in `decks.json` with closed-vocabulary seeds, then fine-tune membership card by card from the in-app Browse drawer.
+- **Multi-Key Sequences**: Supports complex sequences (`<leader>ff`, `gcc`) as seamlessly as single chords, providing step-by-step visual feedback as you type.
 - **Input Isolation**: Hardware keypresses are captured directly by the Wayland inhibitor; no desktop window or application responds while you train.
-- **Spaced Repetition Engine**: Each 24-card session balances unlearned, due, weak, and mastered items to build reliable muscle memory.
+- **Spaced Repetition Engine**: Each session deals up to 24 cards — smaller decks deal every eligible card — balancing unlearned, due, weak, and mastered items to build reliable muscle memory.
 - **Strict Mastery Standard**: A card is marked as mastered only after two consecutive first-try successes across separate runs.
 - **Active Error Correction**: Missed cards display the correct answer for immediate follow-up practice and reappear later in the run.
-- **Seamless State Persistence**: Progress is saved locally in real time; interrupted sessions resume seamlessly, and completing a ground triggers a milestone celebration.
-- **Deck Customization**: Exclude awkward or unpressable shortcuts at any time; return them whenever you want without losing learning history.
-- **Zero-Config Calibration**: Automatically detects your custom Neovim leader keys and tmux prefixes without redundant manual setup.
+- **Seamless State Persistence**: Progress is saved locally in real time; interrupted sessions resume seamlessly, and mastering every card in a deck triggers a milestone celebration.
+- **Gentle Exclusions**: Exclude awkward or unpressable shortcuts at any time; return them whenever you want without losing learning history.
 - **Themes & Localization**: English and Simplified Chinese support, retro sound effects, and five curated palettes: Catppuccin, Tokyo Night, Gruvbox, Everforest, and Ristretto.
 - **Retro Arcade Aesthetic**: CRT scanlines, dot-matrix counters, and marquee borders (animations gracefully disable under Reduced Motion while preserving data displays).
-
-To ensure universal playability across compact (60%/65%) keyboards, bindings requiring keys like the function row, dedicated media keys, Print/Pause/SysRq, or separate navigation clusters (Home/End/Insert/Page/Delete) are omitted by default. Standalone `Esc` is reserved for instant saving and quitting (chords like `Super + Esc` remain fully trainable).
 
 ## Requirements
 
 - Omarchy 4.x
 - Quickshell 0.3.1 (with `Quickshell.Wayland._ShortcutsInhibitor.ShortcutInhibitor`)
 - Hyprland (configured with `binds:disable_keybind_grabbing = false`)
+- `qt6-multimedia` (the overlay imports `QtMultimedia` for its sound effects)
 - Python 3
 
 Keycade requires active input inhibition to run safely. If Wayland shortcut protection cannot be verified, it refuses to launch rather than falling back to an insecure focus-only mode.
-
-## Keyboard Layouts
-
-Keycade evaluates **physical keypresses**, matching Hyprland's internal shortcut dispatch logic: a binding matches the physical key that generates its base keysym when unshifted, regardless of what character is produced when Shift is held. This is essential for non-US layouts—for example, in a German layout, `SUPER + SHIFT + comma` refers to the physical key labeled `,`, even though pressing Shift generates `;`.
-
-Active keymaps are retrieved directly from Hyprland's `input:kb_*` parameters; shortcuts impossible to type on the current layout are automatically excluded. Character comparison fallback only occurs under custom layouts via `input:kb_file` or user directories (`~/.xkb`, `~/.config/xkb`), where Keycade degrades safely rather than guessing.
 
 ## Installation
 
@@ -92,13 +70,67 @@ omarchy restart shell
   ```bash
   omarchy-shell shell summon luneth90.keycade '{}'
   ```
-- **Select Cabinet**: Use the home screen to pick a training ground, then press Enter to begin or resume. Each cabinet displays current completion percentage (or "—" if unplayed).
-- **Switching Grounds**: Click `BACK` at any time; your progress is automatically saved, and returning to that ground restores your exact position.
+- **Pick a Deck**: The home screen lists every deck — `all` first, then your declaration order — with live card counts and mastery. Select one, then press Enter to begin or resume.
+- **Curate**: Open `BROWSE` from the home or results screen to assign cards to a target deck; see [Decks](#decks) below.
+- **Switching Decks**: Click `← BACK` at any time; your progress is automatically saved, and returning to that deck restores your exact position.
 - **Preferences**: Use the top bar to toggle language, sound effects, volume, and color themes. Preferences are saved automatically.
-- **Excluding Shortcuts**: Click `✕ EXCLUDE` during a card to remove it from active runs and mastery counts. Re-enable excluded items anytime via the `EXCLUDED` panel without losing past accuracy stats.
+- **Excluding Shortcuts**: Click `✕ EXCLUDE` during a card to remove it from every deck and from mastery counts. Re-enable excluded items anytime via the `EXCLUDED` panel without losing past accuracy stats.
 - **Exiting**: Release a bare `Esc` key to save and exit immediately. Chords involving Esc (`Super + Esc`, etc.) are treated as ordinary answers.
 
-User statistics and session data are stored under `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade/` and persist across updates.
+User statistics and session data are stored under `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade/` and persist across updates; see [State and Migration](#state-and-migration).
+
+## Decks
+
+A **deck** is a named study scope over the shared LazyVim corpus. The reserved `all` deck always contains every eligible card, is pinned first in the list, and cannot be deleted. With no configuration it is joined by four shipped starters — Navigation (`navigation`), LSP & Diagnostics (`lsp`), Search & Find (`search`), and Git (`git`) — each seeded from pack categories.
+
+Deck contents are computed live on every launch: `seed(corpus) ∪ added − removed`. The seed comes from the config file; `added`/`removed` are your explicit curation choices kept in local state. A LazyVim update or a toggled extra therefore grows or shrinks a seeded deck automatically, and curation that names a currently missing deck or card is retained (inert) until it exists again.
+
+### Configuration
+
+Decks are declared in `${XDG_CONFIG_HOME:-~/.config}/omarchy/keycade/decks.json`. The file is **read-only** to Keycade — it is parsed statically, never written, and no Lua, card literals, or query language is involved:
+
+```json
+{
+  "schemaVersion": 1,
+  "decks": [
+    { "id": "marks", "name": "Marks & Jumps",
+      "seed": { "extras": ["lazyvim.plugins.extras.editor.harpoon2"] } },
+    { "id": "lsp", "name": "LSP & Diagnostics",
+      "seed": { "categories": ["lsp", "diagnostics"], "contexts": ["normal"] } },
+    { "id": "nemesis", "name": "Keeps Getting Me" },
+    { "id": "all", "name": "Everything" }
+  ]
+}
+```
+
+- `schemaVersion` must be `1`. At most 32 declarations are accepted (an `all` override included); the reserved `all` deck itself always exists, declared or not.
+- `id` is the stable state key and must match `^[a-z][a-z0-9-]{0,31}$`. Renaming `name` (up to 48 characters) keeps your curation; changing `id` creates a new deck.
+- `seed` is optional and closed-vocabulary: `categories`, `extras`, and `contexts` declared by the shipped pack. Only present dimensions participate, unioned when several are present, and a present but empty array matches nothing. Omitting `seed` entirely makes the deck manual-only — it starts empty and is filled from Browse — while an explicit empty `seed: {}` is unconstrained and matches every eligible card.
+- Declaring `id: "all"` only overrides its display name; any seed on it is ignored.
+- When the file is **absent**, the four starter decks are used. When **present**, it replaces the starters entirely. When **malformed**, Keycade falls back to `all`, shows the reason, and never blocks training. Invalid entries, unknown keys, and out-of-vocabulary values are skipped, counted, and surfaced.
+
+Custom mappings from `lua/config/keymaps.lua` (literal `vim.keymap.set` / `vim.keymap.del` lines) join the corpus under the `misc` category and can match `misc` or context seeds like any other card — or be hand-picked into any deck.
+
+### Curating Cards
+
+Open **Browse** from the home or results screen (it is disabled during active play; opening it from results returns home first). Pick a target deck — independent of the deck you are studying — then filter by category, custom (`keymaps.lua`), active extras, or membership, and toggle cards in or out of the target. Rows badge the other decks each card belongs to. The reserved `all` deck is read-only there.
+
+Two different gestures remove a card, and both keep its learning history:
+
+- **In a run**, `✕ EXCLUDE` excludes the card **globally** — from every deck including `all` — until you restore it from the top bar.
+- **In Browse**, removing a card only takes it out of the **target deck**.
+
+Curation state is capped at 24 KiB; an addition that would exceed the cap is refused with a notice — nothing is silently evicted.
+
+### Sessions, Mastery, and Resume
+
+- A session deals `min(24, eligible)` cards — a 7-card deck deals 7 — with no repeats apart from remedial review. Starting an empty deck is refused with a hint toward Browse.
+- Mastery stays a per-card property shared across decks (two consecutive first-try successes in separate runs); run counts, training time, and the 100% celebration are per deck.
+- An interrupted run resumes exactly; if cards have left the deck meanwhile, the saved session shrinks to the completed offset plus the remaining cards, keeping scores, history, and the original plan targets.
+
+### State and Migration
+
+Keycade keeps exactly three state kinds — `settings.json`, `stats.json`, and `session.json` — under `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade/`. Updating from a pre-decks release migrates settings schema 3 → 4 and stats schema 4 → 5: all per-card recall history is preserved verbatim, including entries recorded under retired training grounds (retained but inert), and existing LazyVim run counters move to the `all` deck. A global run-identity sequence drives card history and scheduling, independently of the deck-visible run counts. Upgrading preserves every card record and deletes nothing, but no automatic rollback path is provided: older releases may reject the newer settings, stats or session schemas, quarantine those files, and start with fresh visible progress. Back up the state directory before downgrading and retain any quarantined files for recovery — automatic card-history or deck-counter compatibility with an older release is not promised.
 
 ## Uninstallation
 
@@ -112,23 +144,27 @@ Saved data remains preserved in `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/k
 
 ### Host System Inspection
 
-Upstream defaults form the core table. For LazyVim, bounded static readers inspect only fixed files to calibrate `mapleader` / `maplocalleader`, enabled `lazyvim.json` extras, the installed LazyVim commit in `lazy-lock.json`, and top-level literal `vim.keymap.set` / `vim.keymap.del` changes in `lua/config/keymaps.lua`. For tmux without a running server, they inspect only global `prefix` / `prefix2` assignments in `~/.config/tmux/tmux.conf` and `~/.tmux.conf`. Reads are descriptor-relative, reject symlinks, and accept only documented literal shapes. Complex constructs are skipped and counted; no Lua or shell configuration is executed, no editor is spawned, and no `require` or `source-file` chain is followed.
+Upstream defaults form the core table. Bounded static readers inspect only fixed files to calibrate `mapleader` / `maplocalleader`, enabled `lazyvim.json` extras, the installed LazyVim commit in `lazy-lock.json`, top-level literal `vim.keymap.set` / `vim.keymap.del` changes in `lua/config/keymaps.lua`, and the optional `decks.json` deck declarations. Reads are descriptor-relative, reject symlinks, and accept only documented literal shapes. Complex constructs are skipped and counted; no Lua or shell configuration is executed, no editor is spawned, and no `require` chain is followed.
 
-tmux is the only service queried dynamically: once `has-session` confirms an active server, `show-options` retrieves `prefix` and `prefix2`, and `list-keys` fetches live bindings. Herdr consumes the bounded plain-text `--print` listing from Omarchy's fixed, root-owned binding-list command. Both helpers run behind deadlines and output limits, and QML independently rebuilds bounded whitelist models before retaining them.
+The only live system query is the launch preflight: a read-only `hyprctl` check confirms Hyprland allows keybind grabbing before the overlay takes exclusive input. Helpers run behind deadlines and output limits, and the QML side independently rebuilds bounded whitelist models before retaining anything.
 
 ### Tests & Screenshots
 
 ```bash
 python3 -m unittest discover -s tests -p 'test_*.py' -v
-QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= QT_STYLE_OVERRIDE=Fusion \
-  /usr/lib/qt6/bin/qmltestrunner -input tests/qml/tst_algorithms.qml -import /usr/lib/qt6/qml
+for suite in tests/qml/tst_*.qml; do
+  QT_QPA_PLATFORM=offscreen QT_QPA_PLATFORMTHEME= QT_STYLE_OVERRIDE=Fusion \
+    /usr/lib/qt6/bin/qmltestrunner -input "$suite" -import /usr/lib/qt6/qml
+done
 ./tests/test_state_store_qml.sh
-./tests/test_hyprland_source_qml.sh
 ./tests/test_ground_switching_qml.sh
 ./tests/test_run_counters_qml.sh
+./tests/test_mastery_transition_qml.sh
 /usr/lib/qt6/bin/qmllint -I /usr/lib/qt6/qml Keycade.qml lib/*.qml lib/sources/*.qml dev/InputProbe.qml
-./tools/shoot-screenshots
+python3 tests/fuzz_keybinds.py -runs=1000
 ```
+
+The fuzz smoke test needs the pinned dev dependencies (`requirements-dev.txt`, e.g. in a venv). `./tools/shoot-screenshots` reshoots the documentation images on a live Wayland session (maintainer tool, needs `grim`).
 
 ## License
 

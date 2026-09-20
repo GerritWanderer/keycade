@@ -40,16 +40,13 @@ class NotationTests(unittest.TestCase):
                     build_packs.parse_notation(notation)
 
     def test_a_configurable_key_becomes_a_placeholder_not_a_character(self):
-        # A pack must not bake in the key the table was built with: LazyVim's
-        # leader, tmux's prefix and herdr's prefix are all configuration, and
-        # someone who moved theirs still has to be training the mapping.
+        # The pack must not bake in the leader it was built with: someone
+        # who moved theirs still has to be training the mapping.
         steps = build_packs.parse_notation(build_packs.LEADER_MARK + "ff")
         self.assertEqual(steps[0], {"option": "leader"})
         self.assertEqual(steps[1:], [{"mods": 0, "text": "f"}, {"mods": 0, "text": "f"}])
         local = build_packs.parse_notation(build_packs.LOCALLEADER_MARK + "r")
         self.assertEqual(local[0], {"option": "localleader"})
-        self.assertEqual(build_packs.parse_notation(build_packs.PREFIX_MARK)[0],
-                         {"option": "prefix"})
 
     def test_case_survives_without_a_modifier_and_is_folded_with_one(self):
         self.assertEqual(build_packs.parse_notation("gG"),
@@ -78,24 +75,16 @@ class PackTests(unittest.TestCase):
         for forbidden in ("FileView", "XMLHttpRequest", "Qt.include", "import "):
             self.assertNotIn(forbidden, generated)
 
+    def test_only_the_lazyvim_pack_is_shipped(self):
+        self.assertEqual(set(self.packs), {"lazyvim"})
+
     def test_a_pack_never_bakes_in_a_configurable_key(self):
-        # The tmux table was collected against tmux's own default of C-b, but
-        # Omarchy's tmux.conf moves the prefix to C-Space. A baked-in prefix
-        # taught the wrong first key on every Omarchy machine.
-        declared = {"lazyvim": {"leader", "localleader"}, "tmux": {"prefix"},
-                    "neovim": set(), "vim": set()}
+        declared = {"lazyvim": {"leader", "localleader"}}
         for name, pack in self.packs.items():
             with self.subTest(pack=name):
                 used = {step["option"] for entry in pack["bindings"]
                         for step in entry["steps"] if step.get("option")}
                 self.assertTrue(used.issubset(declared[name]), used)
-                if name == "tmux":
-                    # Every tmux binding is the prefix and then a key.
-                    for entry in pack["bindings"]:
-                        self.assertEqual(entry["steps"][0], {"option": "prefix"})
-                        # And the identity never names the key it resolves to,
-                        # so moving the prefix keeps the entry's progress.
-                        self.assertNotIn("C-b", entry["localId"])
 
     def test_a_pack_declares_every_bundle_it_carries_keys_for(self):
         # The runtime matches these against the bundles a machine turned on, so
@@ -159,20 +148,6 @@ class PackTests(unittest.TestCase):
                     for alternate in entry.get("alternates", []):
                         self.assertTrue(1 <= len(alternate) <= 8)
 
-    def test_vim_grammar_is_cited_and_keeps_equivalent_spellings(self):
-        pack = self.packs["vim"]
-        self.assertGreater(len(pack["bindings"]), 100)
-        by_notation = {entry["notation"]: entry for entry in pack["bindings"]}
-        self.assertEqual(by_notation["D"]["alternates"],
-                         [[{"mods": 0, "text": "d"}, {"mods": 0, "text": "$"}]])
-        self.assertEqual(by_notation["S"]["alternates"],
-                         [[{"mods": 0, "text": "c"}, {"mods": 0, "text": "c"}]])
-        self.assertEqual(by_notation["<lt>"]["steps"], [{"mods": 0, "text": "<"}])
-        for entry in pack["bindings"]:
-            self.assertTrue(entry.get("helpTag"), entry["localId"])
-            if entry["category"] == "textobject":
-                self.assertEqual(entry["context"], "operator")
-
     def test_pack_entries_are_unique_and_answerable(self):
         for name, pack in self.packs.items():
             with self.subTest(pack=name):
@@ -182,9 +157,8 @@ class PackTests(unittest.TestCase):
                     for step in entry["steps"]:
                         if step.get("option"):
                             continue
-                        # Esc saves the run and leaves, so no ground answers
-                        # with it; the device cluster is the same rule the
-                        # Hyprland ground applies.
+                        # Esc saves the run and leaves; the device cluster
+                        # is not guaranteed on a compact keyboard.
                         self.assertNotEqual(step.get("named"), "ESC")
                         self.assertNotIn(step.get("named"), build_packs.DEVICE_SPECIAL)
 
@@ -251,7 +225,10 @@ class PackTests(unittest.TestCase):
         used = {entry["descKey"] for pack in self.packs.values() for entry in pack["bindings"]}
         for locale in ("en", "zh-CN"):
             data = json.loads((ROOT / f"assets/locales/{locale}.json").read_text(encoding="utf-8"))
-            stale = {k for k in data if k.startswith("packdesc_")} - used
+            # Retired grounds' translations are pruned in the separate locale
+            # package. Keep the no-stale-description rule for every live pack.
+            namespaces = tuple(f"packdesc_{name}_" for name in self.packs)
+            stale = {k for k in data if k.startswith(namespaces)} - used
             self.assertEqual(stale, set(), f"{locale} carries translations nothing uses")
 
     def test_every_pack_category_has_a_locale_string(self):

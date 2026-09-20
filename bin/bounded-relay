@@ -35,6 +35,12 @@ PR_SET_PDEATHSIG = 1
 # path says nothing about who may replace the file behind it.
 LIBC_PATH = "/usr/lib/libc.so.6"
 READ_SIZE = 64 * 1024
+# The relay's own PID, captured before any child is forked. A child reads its
+# parent back only after the fork, and by then the answer may already be an
+# adoptive parent - init or a subreaper - because the relay died in between.
+# Comparing against the identity captured here closes that race; reading the
+# parent for the first time inside the child cannot.
+_HELPER_PID = os.getpid()
 
 _CHILD: subprocess.Popen[bytes] | None = None
 
@@ -72,16 +78,23 @@ def _trusted_command(path: str) -> str:
 
 
 def _prepare_child() -> None:
-    # Own session so the relay can signal the whole group, plus a kernel death
-    # signal so an immediately killed relay cannot leave the child running.
+    # Own session so the relay can signal the whole group.
     os.setsid()
-    parent = os.getppid()
-    try:
-        libc = ctypes.CDLL(_trusted_library(LIBC_PATH), use_errno=True)
-        libc.prctl(PR_SET_PDEATHSIG, signal.SIGKILL)
-    except OSError:
-        return
-    if os.getppid() != parent:
+    # Before anything is armed: a relay that already died means this child was
+    # adopted, and the parent it reads back is not the relay's.
+    if os.getppid() != _HELPER_PID:
+        os._exit(1)
+    # A kernel death signal so an immediately killed relay cannot leave the
+    # child running. A child that cannot arm it must never exec: anything
+    # failing here raises, which fails the spawn instead of leaving a running
+    # child behind that nothing can reap.
+    libc = ctypes.CDLL(_trusted_library(LIBC_PATH), use_errno=True)
+    if libc.prctl(PR_SET_PDEATHSIG, signal.SIGKILL) != 0:
+        raise OSError(ctypes.get_errno(), "prctl(PR_SET_PDEATHSIG) failed")
+    # The relay died between the fork and the arming above: the death signal
+    # is then armed against the adoptive parent and never fires for the
+    # relay. Leave before exec rather than run unguarded.
+    if os.getppid() != _HELPER_PID:
         os._exit(1)
 
 
@@ -145,7 +158,9 @@ def main() -> int:
             preexec_fn=_prepare_child,
             close_fds=True,
         )
-    except OSError as error:
+    except (OSError, subprocess.SubprocessError) as error:
+        # A preexec_fn failure (death-signal setup included) surfaces as a
+        # spawn failure: no child ever runs without its reaping guarantees.
         _report(f"bounded-relay could not start its command: {error}")
         return 2
 
@@ -156,17 +171,17 @@ def main() -> int:
     except OSError:
         pass
 
-    assert _CHILD.stdout is not None
-    streams = selectors.DefaultSelector()
-    streams.register(_CHILD.stdout, selectors.EVENT_READ)
-    deadline = time.monotonic() + arguments.deadline
-    forwarded = 0
-    output = sys.stdout.buffer
+    streams = None
     try:
+        assert _CHILD.stdout is not None
+        streams = selectors.DefaultSelector()
+        streams.register(_CHILD.stdout, selectors.EVENT_READ)
+        deadline = time.monotonic() + arguments.deadline
+        forwarded = 0
+        output = sys.stdout.buffer
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                _kill_child()
                 _report("bounded-relay exceeded its deadline")
                 return 1
             if not streams.select(min(remaining, 0.1)):
@@ -178,19 +193,29 @@ def main() -> int:
                 break
             forwarded += len(chunk)
             if forwarded > arguments.max_bytes:
-                _kill_child()
                 _report("bounded-relay exceeded its byte budget")
                 return 1
             output.write(chunk)
             output.flush()
+        return _CHILD.wait(timeout=max(0.01, deadline - time.monotonic()))
+    except subprocess.TimeoutExpired:
+        _report("bounded-relay exceeded its deadline")
+        return 1
     except BrokenPipeError:
-        _kill_child()
+        return 1
+    except OSError as error:
+        _report(f"bounded-relay stream failed: {error}")
         return 1
     finally:
-        streams.close()
+        # Every exit from the block above - a clean finish included -
+        # terminates and reaps the child's whole group, closes the stream
+        # state, and resets the teardown global: a child that finished must
+        # not leave its own children behind, and a failed one none at all.
+        _kill_child()
+        if streams is not None:
+            streams.close()
         _CHILD.stdout.close()
-
-    return _CHILD.wait(timeout=max(0.01, deadline - time.monotonic()))
+        _CHILD = None
 
 
 if __name__ == "__main__":

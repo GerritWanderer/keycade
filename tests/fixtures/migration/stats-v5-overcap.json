@@ -1,0 +1,705 @@
+{
+  "schemaVersion": 5,
+  "bindings": {
+    "lazyvim/normal/<leader>ff": {
+      "state": "mastered",
+      "guidedCompleted": true,
+      "dueAt": 1700000000000,
+      "dueRun": 8,
+      "intervalStep": 2,
+      "firstTryAttempts": 5,
+      "firstTryCorrect": 4,
+      "recentFirstTry": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ],
+      "reactions": [
+        1800,
+        1400,
+        1200,
+        1000
+      ],
+      "successfulRuns": [
+        3,
+        4,
+        6
+      ],
+      "lastSuccessfulRun": 6,
+      "lastSeenAt": 1699900000000,
+      "lapseCount": 1
+    },
+    "hyprland/64|Q|killactive|": {
+      "state": "mastered",
+      "guidedCompleted": true,
+      "dueAt": 1700086400000,
+      "dueRun": 9,
+      "intervalStep": 2,
+      "firstTryAttempts": 5,
+      "firstTryCorrect": 4,
+      "recentFirstTry": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ],
+      "reactions": [
+        1801,
+        1401,
+        1201,
+        1001
+      ],
+      "successfulRuns": [
+        3,
+        4,
+        6
+      ],
+      "lastSuccessfulRun": 6,
+      "lastSeenAt": 1699900000001,
+      "lapseCount": 1
+    },
+    "herdr/default/split": {
+      "state": "mastered",
+      "guidedCompleted": true,
+      "dueAt": 1700172800000,
+      "dueRun": 10,
+      "intervalStep": 2,
+      "firstTryAttempts": 5,
+      "firstTryCorrect": 4,
+      "recentFirstTry": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ],
+      "reactions": [
+        1802,
+        1402,
+        1202,
+        1002
+      ],
+      "successfulRuns": [
+        3,
+        4,
+        6
+      ],
+      "lastSuccessfulRun": 6,
+      "lastSeenAt": 1699900000002,
+      "lapseCount": 1
+    },
+    "tmux/prefix/%": {
+      "state": "mastered",
+      "guidedCompleted": true,
+      "dueAt": 1700259200000,
+      "dueRun": 11,
+      "intervalStep": 2,
+      "firstTryAttempts": 5,
+      "firstTryCorrect": 4,
+      "recentFirstTry": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ],
+      "reactions": [
+        1803,
+        1403,
+        1203,
+        1003
+      ],
+      "successfulRuns": [
+        3,
+        4,
+        6
+      ],
+      "lastSuccessfulRun": 6,
+      "lastSeenAt": 1699900000003,
+      "lapseCount": 1
+    },
+    "vim/normal/gg": {
+      "state": "mastered",
+      "guidedCompleted": true,
+      "dueAt": 1700345600000,
+      "dueRun": 12,
+      "intervalStep": 2,
+      "firstTryAttempts": 5,
+      "firstTryCorrect": 4,
+      "recentFirstTry": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ],
+      "reactions": [
+        1804,
+        1404,
+        1204,
+        1004
+      ],
+      "successfulRuns": [
+        3,
+        4,
+        6
+      ],
+      "lastSuccessfulRun": 6,
+      "lastSeenAt": 1699900000004,
+      "lapseCount": 1
+    },
+    "neovim/normal/gd": {
+      "state": "mastered",
+      "guidedCompleted": true,
+      "dueAt": 1700432000000,
+      "dueRun": 13,
+      "intervalStep": 2,
+      "firstTryAttempts": 5,
+      "firstTryCorrect": 4,
+      "recentFirstTry": [
+        true,
+        false,
+        true,
+        true,
+        true
+      ],
+      "reactions": [
+        1805,
+        1405,
+        1205,
+        1005
+      ],
+      "successfulRuns": [
+        3,
+        4,
+        6
+      ],
+      "lastSuccessfulRun": 6,
+      "lastSeenAt": 1699900000005,
+      "lapseCount": 1
+    },
+    "lazyvim/normal/<leader>gg": {
+      "state": "learning",
+      "guidedCompleted": true,
+      "dueAt": 1700000000000,
+      "dueRun": 8,
+      "intervalStep": 1,
+      "firstTryAttempts": 2,
+      "firstTryCorrect": 1,
+      "recentFirstTry": [
+        false,
+        true
+      ],
+      "reactions": [
+        2300
+      ],
+      "successfulRuns": [
+        7
+      ],
+      "lastSuccessfulRun": 7,
+      "lastSeenAt": 1699900000500,
+      "lapseCount": 1
+    }
+  },
+  "decks": {
+    "orphan-00": {
+      "runs": 1,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-01": {
+      "runs": 2,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-02": {
+      "runs": 3,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-03": {
+      "runs": 4,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-04": {
+      "runs": 5,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-05": {
+      "runs": 6,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-06": {
+      "runs": 7,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-07": {
+      "runs": 8,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-08": {
+      "runs": 9,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-09": {
+      "runs": 10,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-10": {
+      "runs": 11,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-11": {
+      "runs": 12,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-12": {
+      "runs": 13,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-13": {
+      "runs": 14,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-14": {
+      "runs": 15,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-15": {
+      "runs": 16,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-16": {
+      "runs": 17,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-17": {
+      "runs": 18,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-18": {
+      "runs": 19,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-19": {
+      "runs": 20,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-20": {
+      "runs": 21,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-21": {
+      "runs": 22,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-22": {
+      "runs": 23,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-23": {
+      "runs": 24,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-24": {
+      "runs": 25,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-25": {
+      "runs": 26,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-26": {
+      "runs": 27,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-27": {
+      "runs": 28,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-28": {
+      "runs": 29,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-29": {
+      "runs": 30,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-30": {
+      "runs": 31,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-31": {
+      "runs": 32,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-32": {
+      "runs": 33,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-33": {
+      "runs": 34,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-34": {
+      "runs": 35,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-35": {
+      "runs": 36,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-36": {
+      "runs": 37,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-37": {
+      "runs": 38,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-38": {
+      "runs": 39,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-39": {
+      "runs": 40,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-40": {
+      "runs": 41,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-41": {
+      "runs": 42,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-42": {
+      "runs": 43,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-43": {
+      "runs": 44,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-44": {
+      "runs": 45,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-45": {
+      "runs": 46,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-46": {
+      "runs": 47,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-47": {
+      "runs": 48,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-48": {
+      "runs": 49,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-49": {
+      "runs": 50,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-50": {
+      "runs": 51,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-51": {
+      "runs": 52,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-52": {
+      "runs": 53,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-53": {
+      "runs": 54,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-54": {
+      "runs": 55,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-55": {
+      "runs": 56,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-56": {
+      "runs": 57,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-57": {
+      "runs": 58,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-58": {
+      "runs": 59,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "orphan-59": {
+      "runs": 60,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "zz-declared": {
+      "runs": 99,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    },
+    "all": {
+      "runs": 7,
+      "coverageCursor": 13,
+      "totalTrainingMs": 123456,
+      "firstMasteryAt": 1699800000000,
+      "firstMasteryRun": 6,
+      "firstMasteryCelebrated": true
+    }
+  }
+}
