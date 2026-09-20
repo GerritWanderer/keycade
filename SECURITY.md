@@ -21,7 +21,7 @@ The Keycade LazyVim team takes security vulnerabilities seriously. We appreciate
 Please do **not** report security vulnerabilities through public GitHub issues. Instead:
 
 1. **GitHub Private Vulnerability Reporting**: Go to the [Security tab](https://github.com/GerritWanderer/keycade-lazyvim/security/advisories/new) of this repository and click **"Report a vulnerability"**. This creates an encrypted private advisory draft visible only to project maintainers.
-2. **Email Disclosure**: If private vulnerability reporting is unavailable, email security concerns directly to this repository's maintainer at `gerrit.wanderer@gmail.com` with the subject line `[SECURITY] Keycade LazyVim Vulnerability Report`. A finding that concerns the upstream Keycade project rather than this fork can instead reach its author at `luneth90@icloud.com`.
+2. **Maintainer Contact**: If private vulnerability reporting is unavailable to you, reach this repository's maintainer through the contact details on the [@GerritWanderer](https://github.com/GerritWanderer) GitHub profile, using the subject line `[SECURITY] Keycade LazyVim Vulnerability Report`. Please do not open a public issue to ask for a private channel. A finding that concerns the upstream Keycade project rather than this fork can instead reach its author at `luneth90@icloud.com`.
 
 ### What to Include in a Report
 
