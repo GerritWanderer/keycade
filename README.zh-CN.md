@@ -180,4 +180,4 @@ python3 tests/fuzz_keybinds.py -runs=1000
 
 ## 开源协议
 
-Keycade LazyVim 采用 [MIT 许可证](LICENSE) 发布。Copyright © 2026 luneth90。
+Keycade LazyVim 采用 [MIT 许可证](LICENSE) 发布。Copyright © 2026 luneth90 与 © 2026 GerritWanderer。

@@ -180,4 +180,4 @@ The fuzz smoke test needs the pinned dev dependencies (`requirements-dev.txt`, e
 
 ## License
 
-Keycade LazyVim is released under the [MIT License](LICENSE). Copyright © 2026 luneth90.
+Keycade LazyVim is released under the [MIT License](LICENSE). Copyright © 2026 luneth90 and © 2026 GerritWanderer.
