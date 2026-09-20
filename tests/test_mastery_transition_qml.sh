@@ -23,8 +23,8 @@ if [[ -z ${WAYLAND_DISPLAY:-} ]]; then
 fi
 
 mkdir -p -- "$test_root/config" "$test_root/state" "$test_root/home"
-cp -r -- "$repo_root" "$test_root/config/keycade"
-rm -rf -- "$test_root/config/keycade/.git"
+cp -r -- "$repo_root" "$test_root/config/keycade-lazyvim"
+rm -rf -- "$test_root/config/keycade-lazyvim/.git"
 
 cat > "$test_root/stats.json" <<'JSON'
 {"schemaVersion":4,"bindings":{"lazyvim/test":{"state":"learning","guidedCompleted":true,"dueAt":0,"dueRun":2,"intervalStep":2,"firstTryAttempts":1,"firstTryCorrect":1,"recentFirstTry":[true],"reactions":[900],"successfulRuns":[1],"lastSuccessfulRun":1,"lastSeenAt":1,"lapseCount":0}},"profiles":{"lazyvim":{"runs":1,"coverageCursor":0,"totalTrainingMs":1000,"firstMasteryAt":0,"firstMasteryRun":0,"firstMasteryCelebrated":false,"knownTotal":1,"knownMastered":0}}}
@@ -44,7 +44,7 @@ done
 cat > "$test_root/config/shell.qml" <<'EOF'
 import QtQuick
 import Quickshell
-import "keycade" as Keycade
+import "keycade-lazyvim" as Keycade
 
 ShellRoot {
   Keycade.Keycade { id: overlay }
@@ -184,12 +184,12 @@ if ! grep -Fq -- "MASTERY_TRANSITION_OK" <<<"$output"; then
   exit 1
 fi
 
-if [[ -e $test_root/state/omarchy/keycade/session.json ]]; then
+if [[ -e $test_root/state/omarchy/keycade-lazyvim/session.json ]]; then
   printf 'MASTERY_TRANSITION_FAILED: resumable session survived 100%%\n' >&2
   exit 1
 fi
 
-python3 - "$test_root/state/omarchy/keycade/stats.json" <<'PY'
+python3 - "$test_root/state/omarchy/keycade-lazyvim/stats.json" <<'PY'
 import json, sys
 from pathlib import Path
 stats = json.loads(Path(sys.argv[1]).read_text("utf-8"))

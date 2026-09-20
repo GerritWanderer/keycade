@@ -320,7 +320,7 @@ Item {
     root.sourceLabel = root.provenanceLabel(pack)
     root.fingerprint = root.packFingerprint(pack)
     root.loading = false
-    if (refused > 0) console.warn("Keycade skipped " + refused + " invalid pack entr(ies)")
+    if (refused > 0) console.warn("Keycade LazyVim skipped " + refused + " invalid pack entr(ies)")
     root.loaded()
   }
 

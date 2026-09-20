@@ -9,8 +9,8 @@ import unittest
 
 from test_deck_ui import DeckUiHarness, IDS, LONG_NAME, MARKUP_NAME, EN, ZH, render_copy
 
-RENDERS = Path("/tmp/keycade-wp7b-renders")
-WP8_RENDERS = Path("/tmp/keycade-wp8-renders")
+RENDERS = Path("/tmp/keycade-lazyvim-wp7b-renders")
+WP8_RENDERS = Path("/tmp/keycade-lazyvim-wp8-renders")
 EXTRA = "lazyvim.plugins.extras.editor.harpoon2"
 
 # Expected copy is read from the shipped catalogs (see test_deck_ui), never
@@ -214,7 +214,7 @@ class DeckDrawerUiTests(DeckUiHarness):
         self.settings["deckCards"] = delta
         self.write_state("settings", self.settings)
         self.run_ui('test.check(overlay.testStore.ready, "canonical startup")')
-        path = self.home / "state/omarchy/keycade/settings.json"
+        path = self.home / "state/omarchy/keycade-lazyvim/settings.json"
         before = path.read_bytes()
         self.run_ui('''
           test.openBrowse()

@@ -1,6 +1,6 @@
 #!/usr/bin/bash
 
-# Test double for the one hyprctl surface Keycade still uses: the read-only
+# Test double for the one hyprctl surface Keycade LazyVim still uses: the read-only
 # launch-preflight query behind bin/keybinds-json --guard-status. CI installs
 # this root-owned as /usr/bin/hyprctl (.github/workflows/ci.yml) so the R7
 # trusted-command checks have a binary to accept.

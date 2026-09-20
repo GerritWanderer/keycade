@@ -21,8 +21,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 PACK = json.loads((ROOT / "assets/packs/lazyvim.json").read_text())
 IDS = ["lazyvim/" + card["localId"] for card in PACK["bindings"] if not card["extras"]][:8]
-RENDER_DIR = Path("/tmp/keycade-wp7a-renders")
-WP8_RENDER_DIR = Path("/tmp/keycade-wp8-renders")
+RENDER_DIR = Path("/tmp/keycade-lazyvim-wp7a-renders")
+WP8_RENDER_DIR = Path("/tmp/keycade-lazyvim-wp8-renders")
 # Expected UI copy comes from the shipped catalogs, so these assertions track
 # the actual translations instead of a second hardcoded snapshot of them.
 LOCALES = {path.stem: json.loads(path.read_text(encoding="utf-8"))
@@ -67,7 +67,7 @@ PANEL = '''  PanelWindow {
     visible: root.opened
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    WlrLayershell.namespace: "keycade"
+    WlrLayershell.namespace: "keycade-lazyvim"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: guard.wantsFocus ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore'''
@@ -239,12 +239,12 @@ class DeckUiHarness(unittest.TestCase):
                        input=json.dumps(value) + "\n", text=True, capture_output=True, check=True, timeout=5)
 
     def write_decks(self, decks):
-        config = self.home / "config/omarchy/keycade"
+        config = self.home / "config/omarchy/keycade-lazyvim"
         config.mkdir(parents=True, exist_ok=True)
         (config / "decks.json").write_text(json.dumps({"schemaVersion": 1, "decks": decks}))
 
     def write_raw_decks(self, text):
-        config = self.home / "config/omarchy/keycade"
+        config = self.home / "config/omarchy/keycade-lazyvim"
         config.mkdir(parents=True, exist_ok=True)
         (config / "decks.json").write_text(text)
 
@@ -726,7 +726,7 @@ class DeckHudUiTests(DeckUiHarness):
 '''
 
     def read_state(self, kind):
-        return json.loads((self.home / f"state/omarchy/keycade/{kind}.json").read_text())
+        return json.loads((self.home / f"state/omarchy/keycade-lazyvim/{kind}.json").read_text())
 
     def prepare_tiny_deck(self):
         self.write_decks([{"id": "tiny", "name": "Tiny Seven"}])

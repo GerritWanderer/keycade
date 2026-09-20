@@ -11,14 +11,14 @@ The following table lists the release branches and versions that currently recei
 
 ## Reporting a Vulnerability
 
-The Keycade team takes security vulnerabilities seriously. We appreciate your efforts to responsibly disclose findings.
+The Keycade LazyVim team takes security vulnerabilities seriously. We appreciate your efforts to responsibly disclose findings.
 
 ### Private Reporting Channels
 
 Please do **not** report security vulnerabilities through public GitHub issues. Instead:
 
-1. **GitHub Private Vulnerability Reporting**: Go to the [Security tab](https://github.com/luneth90/keycade/security/advisories/new) of this repository and click **"Report a vulnerability"**. This creates an encrypted private advisory draft visible only to project maintainers.
-2. **Email Disclosure**: If private vulnerability reporting is unavailable, email security concerns directly to `luneth90@icloud.com` with the subject line `[SECURITY] Keycade Vulnerability Report`.
+1. **GitHub Private Vulnerability Reporting**: Go to the [Security tab](https://github.com/GerritWanderer/keycade-lazyvim/security/advisories/new) of this repository and click **"Report a vulnerability"**. This creates an encrypted private advisory draft visible only to project maintainers.
+2. **Email Disclosure**: If private vulnerability reporting is unavailable, email security concerns directly to `luneth90@icloud.com` with the subject line `[SECURITY] Keycade LazyVim Vulnerability Report`.
 
 ### What to Include in a Report
 

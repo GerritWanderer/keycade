@@ -120,8 +120,8 @@ class AssetTests(unittest.TestCase):
         # Packaging identity is pinned by the marketplace contract: no
         # version bump, entry-point or lifecycle change in this package.
         self.assertEqual(manifest["schemaVersion"], 1)
-        self.assertEqual(manifest["id"], "luneth90.keycade")
-        self.assertEqual(manifest["version"], "1.0.1")
+        self.assertEqual(manifest["id"], "gerritwanderer.keycade-lazyvim")
+        self.assertEqual(manifest["version"], "2.0.0")
         self.assertEqual(manifest["kinds"], ["overlay"])
         self.assertEqual(manifest["entryPoints"], {"overlay": "Keycade.qml"})
         self.assertIs(manifest["keepLoaded"], True)
@@ -198,9 +198,9 @@ class AssetTests(unittest.TestCase):
             blocks = re.findall(r"```json\n(.*?)```", text, re.DOTALL)
             self.assertEqual(len(blocks), 1, f"{name}: exactly one json example")
             example = json.loads(blocks[0])
-            with tempfile.TemporaryDirectory(prefix="keycade-readme-example-") as tmp:
+            with tempfile.TemporaryDirectory(prefix="keycade-lazyvim-readme-example-") as tmp:
                 home = Path(tmp)
-                files = app_config.FILES["keycade"]["decks"]
+                files = app_config.FILES["keycade-lazyvim"]["decks"]
                 target = home / files[0]
                 target.parent.mkdir(parents=True)
                 target.write_text(blocks[0], encoding="utf-8")

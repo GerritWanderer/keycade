@@ -23,11 +23,11 @@ if [[ -z ${WAYLAND_DISPLAY:-} ]]; then
 fi
 
 mkdir -p -- "$test_root/config" "$test_root/state" "$test_root/home"
-cp -r -- "$repo_root" "$test_root/config/keycade"
-rm -rf -- "$test_root/config/keycade/.git"
+cp -r -- "$repo_root" "$test_root/config/keycade-lazyvim"
+rm -rf -- "$test_root/config/keycade-lazyvim/.git"
 
 # Empty, isolated HOME means the core table: no local extras or overrides.
-expected=$(python3 - "$test_root/config/keycade" "$test_root" <<'PY'
+expected=$(python3 - "$test_root/config/keycade-lazyvim" "$test_root" <<'PY'
 import json, sys
 from pathlib import Path
 root, out = Path(sys.argv[1]), Path(sys.argv[2])
@@ -88,7 +88,7 @@ done
 cat > "$test_root/config/shell.qml" <<EOF
 import QtQuick
 import Quickshell
-import "keycade" as Keycade
+import "keycade-lazyvim" as Keycade
 
 ShellRoot {
   Keycade.Keycade { id: overlay }
@@ -243,7 +243,7 @@ python3 - "$test_root" <<'PY'
 import json, sys
 from pathlib import Path
 root = Path(sys.argv[1])
-state = root / "state/omarchy/keycade"
+state = root / "state/omarchy/keycade-lazyvim"
 session = json.loads((state / "session.json").read_text("utf-8"))
 original = json.loads((root / "session.json").read_text("utf-8"))
 assert session["schemaVersion"] == 2 and session["deckId"] == "all" and session["runId"] == 5, session

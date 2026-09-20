@@ -145,7 +145,7 @@ Item {
   // use the reserved identity (or a read-only preview before a new session).
   readonly property int activeRunId: root.sessionRunIdentity > 0
       ? root.sessionRunIdentity : Stats.peekRunIdentity(store.stats)
-  readonly property string marketplaceUrl: "https://plugins.omarchy.org/plugin.html?id=luneth90.keycade"
+  readonly property string marketplaceUrl: "https://plugins.omarchy.org/plugin.html?id=gerritwanderer.keycade-lazyvim"
 
   readonly property var themePalette: Palettes.palette(root.themeName)
   readonly property color voidColor: root.themePalette.voidColor
@@ -210,7 +210,7 @@ Item {
     root.opened = false
     root.view = "closed"
     if (root.shell && typeof root.shell.hide === "function")
-      root.shell.hide((root.manifest && root.manifest.id) || "luneth90.keycade")
+      root.shell.hide((root.manifest && root.manifest.id) || "gerritwanderer.keycade-lazyvim")
     if (externalUrl) Qt.openUrlExternally(externalUrl)
   }
 
@@ -1470,7 +1470,7 @@ Item {
     visible: root.opened
     anchors { top: true; bottom: true; left: true; right: true }
     color: "transparent"
-    WlrLayershell.namespace: "keycade"
+    WlrLayershell.namespace: "keycade-lazyvim"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: guard.wantsFocus ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore

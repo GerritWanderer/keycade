@@ -1,10 +1,10 @@
 {
   "schemaVersion": 1,
-  "id": "luneth90.keycade",
-  "name": "Keycade",
-  "version": "1.0.1",
-  "author": "luneth90",
-  "description": "An arcade-style LazyVim shortcut recall trainer for Omarchy (Wayland) — your own decks, each with its own progress and mastery.",
+  "id": "gerritwanderer.keycade-lazyvim",
+  "name": "Keycade LazyVim",
+  "version": "2.0.0",
+  "author": "gerritwanderer",
+  "description": "An arcade-style LazyVim shortcut recall trainer for Omarchy (Wayland) \u2014 your own decks, each with its own progress and mastery.",
   "kinds": [
     "overlay"
   ],

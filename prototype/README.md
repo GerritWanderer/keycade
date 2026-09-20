@@ -1,4 +1,4 @@
-# Keycade visual prototype
+# Keycade LazyVim visual prototype
 
 零依赖的 HTML/CSS/JavaScript 交互原型，用于验证 “16-bit Desktop Arcade”
 的像素街机视觉、主题适配和单一自适应对局。动作名和说明使用各语言易读的现代

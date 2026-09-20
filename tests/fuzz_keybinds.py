@@ -24,10 +24,10 @@ with atheris.instrument_imports():
     APP_CONFIG = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(APP_CONFIG)
 
-HOME = tempfile.TemporaryDirectory(prefix="keycade-decks-fuzz-")
+HOME = tempfile.TemporaryDirectory(prefix="keycade-lazyvim-decks-fuzz-")
 atexit.register(HOME.cleanup)
 HOME_PATH = Path(HOME.name)
-FILES = APP_CONFIG.FILES["keycade"]["decks"]
+FILES = APP_CONFIG.FILES["keycade-lazyvim"]["decks"]
 DECK_PATH = HOME_PATH / FILES[0]
 DECK_PATH.parent.mkdir(parents=True)
 # This isolated process must never follow the caller's personal config root.

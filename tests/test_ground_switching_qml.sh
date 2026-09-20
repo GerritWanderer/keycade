@@ -23,12 +23,12 @@ if [[ -z ${WAYLAND_DISPLAY:-} ]]; then
 fi
 
 mkdir -p -- "$test_root/config" "$test_root/state" "$test_root/home/.config/nvim/lua/config"
-cp -r -- "$repo_root" "$test_root/config/keycade"
-rm -rf -- "$test_root/config/keycade/.git"
+cp -r -- "$repo_root" "$test_root/config/keycade-lazyvim"
+rm -rf -- "$test_root/config/keycade-lazyvim/.git"
 
 # Expected counts come from the unchanged shipped table and synthetic config,
 # never from the source under test or the maintainer's local configuration.
-expected=$(python3 - "$test_root/config/keycade" "$test_root" <<'PY'
+expected=$(python3 - "$test_root/config/keycade-lazyvim" "$test_root" <<'PY'
 import json, sys
 from pathlib import Path
 root, out = Path(sys.argv[1]), Path(sys.argv[2])
@@ -68,7 +68,7 @@ done
 cat > "$test_root/config/shell.qml" <<EOF
 import QtQuick
 import Quickshell
-import "keycade" as Keycade
+import "keycade-lazyvim" as Keycade
 
 ShellRoot {
   Keycade.Keycade { id: overlay }
@@ -167,7 +167,7 @@ if ! grep -Fq -- "GROUND_LOADING_OK" <<<"$output"; then
   exit 1
 fi
 
-python3 - "$test_root/state/omarchy/keycade/settings.json" <<'PY'
+python3 - "$test_root/state/omarchy/keycade-lazyvim/settings.json" <<'PY'
 import json, sys
 from pathlib import Path
 settings = json.loads(Path(sys.argv[1]).read_text("utf-8"))

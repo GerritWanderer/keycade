@@ -1,12 +1,12 @@
 #!/usr/bin/python3
 """Emit what the training ground's own configuration says about itself.
 
-The table Keycade deals for LazyVim is the upstream defaults, shipped with
+The table Keycade LazyVim deals is the upstream defaults, shipped with
 the plugin. This helper reads the small, fixed-shape part of a machine's
 configuration that says how those defaults were *changed*: which key every
 other binding hangs off, which opt-in bundles are turned on, which upstream
 version is installed, and which top-level literal keymap calls add, replace
-or delete a binding. The same launch also reads Keycade's declarative decks.json
+or delete a binding. The same launch also reads the plugin's declarative decks.json
 without writing it, keeping absence distinct from a malformed configuration.
 
 What it will not do, in the words of the rule it lives under:
@@ -92,7 +92,7 @@ FILES: dict[str, dict[str, list[str]]] = {
         "lock": [".config/nvim/lazy-lock.json"],
         "keymaps": [".config/nvim/lua/config/keymaps.lua"],
     },
-    "keycade": {"decks": [".config/omarchy/keycade/decks.json"]},
+    "keycade-lazyvim": {"decks": [".config/omarchy/keycade-lazyvim/decks.json"]},
 }
 
 
@@ -972,7 +972,7 @@ def read_decks(home: Path, files: list[str]) -> dict[str, Any]:
                     or has_controls(config_home) or ".." in Path(config_home).parts:
                 return deck_result("invalid", "unsafe-config-home", rejected=1)
             anchor = Path(config_home)
-            relative = "omarchy/keycade/decks.json"
+            relative = "omarchy/keycade-lazyvim/decks.json"
         else:
             anchor, relative = home, files[0]
         value = read_json(anchor, relative, strict=True, missing=absent)
@@ -1110,7 +1110,7 @@ def snapshot(profile: str, home: Path) -> dict[str, Any]:
         "upstream": upstream,
         "bindings": bindings,
         "bindingSkipped": binding_skipped,
-        "deckConfig": read_decks(home, FILES["keycade"]["decks"]),
+        "deckConfig": read_decks(home, FILES["keycade-lazyvim"]["decks"]),
         # Every value this could not read, and why. A skipped value is visible
         # in the interface; a guessed one would not be.
         "skipped": skipped,

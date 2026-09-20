@@ -1,21 +1,21 @@
-# Keycade
+# Keycade LazyVim
 
 [English](README.md) | **简体中文**
 
 > 专为 Omarchy（Wayland）打造的街机风格 LazyVim 快捷键记忆训练器，由你自己的牌组驱动
 
-[![CI](https://github.com/luneth90/keycade/actions/workflows/ci.yml/badge.svg)](https://github.com/luneth90/keycade/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/luneth90/keycade/actions/workflows/codeql.yml/badge.svg)](https://github.com/luneth90/keycade/actions/workflows/codeql.yml)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/luneth90/keycade/badge)](https://scorecard.dev/viewer/?uri=github.com/luneth90/keycade)
+[![CI](https://github.com/GerritWanderer/keycade-lazyvim/actions/workflows/ci.yml/badge.svg)](https://github.com/GerritWanderer/keycade-lazyvim/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/GerritWanderer/keycade-lazyvim/actions/workflows/codeql.yml/badge.svg)](https://github.com/GerritWanderer/keycade-lazyvim/actions/workflows/codeql.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/GerritWanderer/keycade-lazyvim/badge)](https://scorecard.dev/viewer/?uri=github.com/GerritWanderer/keycade-lazyvim)
 [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/14452/badge)](https://www.bestpractices.dev/projects/14452)
-[![codecov](https://codecov.io/gh/luneth90/keycade/branch/main/graph/badge.svg)](https://codecov.io/gh/luneth90/keycade)
-[![Omarchy Marketplace](https://img.shields.io/badge/Omarchy%20Marketplace-listed-2ea44f?logo=omarchy)](https://plugins.omarchy.org/plugin.html?id=luneth90.keycade)
-[![GitHub Release](https://img.shields.io/github/v/release/luneth90/keycade?logo=github)](https://github.com/luneth90/keycade/releases)
+[![codecov](https://codecov.io/gh/GerritWanderer/keycade-lazyvim/branch/main/graph/badge.svg)](https://codecov.io/gh/GerritWanderer/keycade-lazyvim)
+[![Omarchy Marketplace](https://img.shields.io/badge/Omarchy%20Marketplace-listed-2ea44f?logo=omarchy)](https://plugins.omarchy.org/plugin.html?id=gerritwanderer.keycade-lazyvim)
+[![GitHub Release](https://img.shields.io/github/v/release/GerritWanderer/keycade-lazyvim?logo=github)](https://github.com/GerritWanderer/keycade-lazyvim/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ![LazyVim 的 leader 连打](docs/screenshots/keycade-lazyvim-zh-CN.png)
 
-Keycade 是 Omarchy 的原生桌面覆盖层（Overlay），将 LazyVim 快捷键记忆转化为节奏明快、街机风格的闯关练习。所有按键输入均在本地拦截判定，训练时不会误触发系统或应用的原本动作。
+Keycade LazyVim 是 Omarchy 的原生桌面覆盖层（Overlay），将 LazyVim 快捷键记忆转化为节奏明快、街机风格的闯关练习。所有按键输入均在本地拦截判定，训练时不会误触发系统或应用的原本动作。
 
 练习题库来自 LazyVim 官方键位表，并自动按你的 leader 键、已启用的 extras 模块与 `lua/config/keymaps.lua` 自定义映射完成校准。你的练习范围是一个个**牌组**：包含全部可用卡片的保留牌组 `all`、四个内置入门牌组，或你在 `decks.json` 中自行声明的收藏。每个牌组拥有独立的卡片计数、对局次数与掌握度评估，而每张卡片的记忆历史在所有牌组之间共享。
 
@@ -41,24 +41,24 @@ Keycade 是 Omarchy 的原生桌面覆盖层（Overlay），将 LazyVim 快捷�
 - `qt6-multimedia`（覆盖层的音效需要导入 `QtMultimedia`）
 - Python 3
 
-Keycade 启动前必须确认 Wayland 快捷键抑制（输入保护）已完全激活；若保护不可用，程序将安全拒绝启动，绝不降级至仅依赖窗口焦点的不可靠模式。
+Keycade LazyVim 启动前必须确认 Wayland 快捷键抑制（输入保护）已完全激活；若保护不可用，程序将安全拒绝启动，绝不降级至仅依赖窗口焦点的不可靠模式。
 
 ## 安装指南
 
 ```bash
-omarchy plugin add https://github.com/luneth90/keycade.git --enable
+omarchy plugin add https://github.com/GerritWanderer/keycade-lazyvim.git --enable
 ```
 
 在 `~/.config/hypr/bindings.lua` 中添加唤起快捷键，例如：
 
 ```bash
-echo 'o.bind("SUPER + SHIFT + K", "Keycade", "omarchy-shell shell summon luneth90.keycade '\''{}'\''")' >> ~/.config/hypr/bindings.lua
+echo 'o.bind("SUPER + SHIFT + K", "Keycade LazyVim", "omarchy-shell shell summon gerritwanderer.keycade-lazyvim '\''{}'\''")' >> ~/.config/hypr/bindings.lua
 ```
 
 ## 更新指南
 
 ```bash
-omarchy plugin update luneth90.keycade
+omarchy plugin update gerritwanderer.keycade-lazyvim
 omarchy restart shell
 ```
 
@@ -68,7 +68,7 @@ omarchy restart shell
 
 - **启动**：按下快捷键 `Super + Shift + K`，或在终端执行：
   ```bash
-  omarchy-shell shell summon luneth90.keycade '{}'
+  omarchy-shell shell summon gerritwanderer.keycade-lazyvim '{}'
   ```
 - **选择牌组**：首页按声明顺序列出所有牌组——`all` 固定在最前——并实时显示每个牌组的卡片数量与掌握度。选定后按回车开始或继续练习。
 - **整理卡片**：在首页或结算页打开「浏览」，把卡片分配进目标牌组；详见下文「牌组」。
@@ -77,7 +77,7 @@ omarchy restart shell
 - **排除特定快捷键**：对局中点击卡片右上方的 `✕ 排除此键`，将该卡片从所有牌组与掌握度统计中移除；点击顶栏「已排除」可随时查看并恢复，历史数据完好保留。
 - **退出保存**：单按并松开 `Esc` 键即可安全存盘并关闭覆盖层。带有修饰键的 Esc 组合键（如 `Super + Esc`）作为常规快捷键处理，不触发退出。
 
-用户进度与会话数据持久化保存在 `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade/` 目录下，更新插件不会丢失数据；详见「状态与迁移」。
+用户进度与会话数据持久化保存在 `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade-lazyvim/` 目录下，更新插件不会丢失数据；详见「状态与迁移」。
 
 ## 牌组
 
@@ -87,7 +87,7 @@ omarchy restart shell
 
 ### 配置
 
-牌组在 `${XDG_CONFIG_HOME:-~/.config}/omarchy/keycade/decks.json` 中声明。该文件对 Keycade **只读**——只做静态解析，绝不写入，也不涉及 Lua、卡片字面量或查询语言：
+牌组在 `${XDG_CONFIG_HOME:-~/.config}/omarchy/keycade-lazyvim/decks.json` 中声明。该文件对 Keycade LazyVim **只读**——只做静态解析，绝不写入，也不涉及 Lua、卡片字面量或查询语言：
 
 ```json
 {
@@ -130,15 +130,27 @@ omarchy restart shell
 
 ### 状态与迁移
 
-Keycade 只有三种状态文件——`settings.json`、`stats.json` 与 `session.json`——位于 `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade/`。从牌组功能之前的版本升级时，settings 从 schema 3 迁移到 4、stats 从 4 迁移到 5：每张卡片的记忆历史逐字保留，包括旧版按应用划分的机台下记录的历史（保留但不参与统计），原 LazyVim 的对局计数转移到 `all` 牌组。全局对局标识序列驱动卡片历史与排程，与牌组界面上显示的对局计数相互独立。升级到本版本会逐字保留所有卡片记录、不做任何删除，但不提供自动回退路径：旧版本可能拒绝新的 settings、stats 或 session 模式，将相关文件隔离后以全新进度启动。降级前请备份状态目录，并保留任何被隔离的文件以便恢复——不承诺旧版本能自动兼容卡片历史或牌组计数。
+Keycade LazyVim 只有三种状态文件——`settings.json`、`stats.json` 与 `session.json`——位于 `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade-lazyvim/`。从牌组功能之前的版本升级时，settings 从 schema 3 迁移到 4、stats 从 4 迁移到 5：每张卡片的记忆历史逐字保留，包括旧版按应用划分的机台下记录的历史（保留但不参与统计），原 LazyVim 的对局计数转移到 `all` 牌组。全局对局标识序列驱动卡片历史与排程，与牌组界面上显示的对局计数相互独立。升级到本版本会逐字保留所有卡片记录、不做任何删除，但不提供自动回退路径：旧版本可能拒绝新的 settings、stats 或 session 模式，将相关文件隔离后以全新进度启动。降级前请备份状态目录，并保留任何被隔离的文件以便恢复——不承诺旧版本能自动兼容卡片历史或牌组计数。
+
+#### 从 `luneth90.keycade` 迁移
+
+Keycade LazyVim 使用新的插件 ID 发布，Omarchy 会将它与旧插件并列安装，而不是原地升级：
+
+```bash
+omarchy plugin add https://github.com/GerritWanderer/keycade-lazyvim.git --enable
+mv ~/.config/omarchy/keycade ~/.config/omarchy/keycade-lazyvim   # 仅在你声明过牌组时需要
+omarchy plugin remove luneth90.keycade
+```
+
+首次启动会以重命名的方式接管已存在的 `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade/` 目录，所有卡片记录、对局计数与未完成的对局原样保留。若 `keycade-lazyvim` 状态目录已存在，旧目录将保持原样、绝不合并。另有两处需要你手动更新：重新绑定 Hyprland 快捷键（绑定中同时写有插件 ID 与显示名称），以及更新任何匹配 `keycade` 图层命名空间的 `layerrule`——它现在是 `keycade-lazyvim`。未迁移的 `decks.json` 会被视为不存在，此时内置入门牌组生效，功能不受影响。
 
 ## 卸载
 
 ```bash
-omarchy plugin remove luneth90.keycade
+omarchy plugin remove gerritwanderer.keycade-lazyvim
 ```
 
-卸载后用户数据仍安全保留在 `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade/`。Keycade 绝不在卸载时附带删除用户数据或静默修改 Hyprland 配置的危险脚本。
+卸载后用户数据仍安全保留在 `${XDG_STATE_HOME:-$HOME/.local/state}/omarchy/keycade-lazyvim/`。Keycade LazyVim 绝不在卸载时附带删除用户数据或静默修改 Hyprland 配置的危险脚本。
 
 ## 开发与测试说明
 
@@ -168,4 +180,4 @@ python3 tests/fuzz_keybinds.py -runs=1000
 
 ## 开源协议
 
-Keycade 采用 [MIT 许可证](LICENSE) 发布。Copyright © 2026 luneth90。
+Keycade LazyVim 采用 [MIT 许可证](LICENSE) 发布。Copyright © 2026 luneth90。
