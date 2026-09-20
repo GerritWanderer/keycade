@@ -38,6 +38,7 @@ Keycade 是 Omarchy 的原生桌面覆盖层（Overlay），将 LazyVim 快捷�
 - Omarchy 4.x
 - Quickshell 0.3.1（须包含 `Quickshell.Wayland._ShortcutsInhibitor.ShortcutInhibitor`）
 - Hyprland（须配置 `binds:disable_keybind_grabbing = false`）
+- `qt6-multimedia`（覆盖层的音效需要导入 `QtMultimedia`）
 - Python 3
 
 Keycade 启动前必须确认 Wayland 快捷键抑制（输入保护）已完全激活；若保护不可用，程序将安全拒绝启动，绝不降级至仅依赖窗口焦点的不可靠模式。

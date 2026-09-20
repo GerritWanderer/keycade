@@ -38,6 +38,7 @@ The training corpus is the official LazyVim key table, calibrated automatically 
 - Omarchy 4.x
 - Quickshell 0.3.1 (with `Quickshell.Wayland._ShortcutsInhibitor.ShortcutInhibitor`)
 - Hyprland (configured with `binds:disable_keybind_grabbing = false`)
+- `qt6-multimedia` (the overlay imports `QtMultimedia` for its sound effects)
 - Python 3
 
 Keycade requires active input inhibition to run safely. If Wayland shortcut protection cannot be verified, it refuses to launch rather than falling back to an insecure focus-only mode.
