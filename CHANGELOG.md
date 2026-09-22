@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Symlinked configuration read as absent**: `bin/app-config-json` opened every path component with `O_NOFOLLOW`, so a `~/.config/nvim` linked into a dotfiles repository — the ordinary setup for stow, chezmoi and yadm — failed to open and the whole calibration read as empty. Custom `keymaps.lua` bindings, enabled `lazyvim.json` extras and the installed LazyVim version were all silently missing, and the keymaps filter in the browser showed nothing. The read now follows a symlinked component and vets what it lands on instead of refusing it.
+
+### Security
+
+- **R3 scoped to state I/O**: the `O_NOFOLLOW` rule continues to govern every write under `~/.local/state/omarchy/keycade-lazyvim/`, which is where a redirected path could do harm. Read-only configuration reads — `options.lua`, `lazyvim.json`, `lazy-lock.json`, `keymaps.lua` and `decks.json` — instead `fstat` each component on the descriptor already held and refuse any that is not owned by the caller or by root, or that is group/world-writable unless it is a sticky directory. Ownership is checked on the open descriptor rather than the pathname, so it cannot change between the check and the read. Nothing on this path writes, and R1's no-execution rule and every existing byte cap are untouched.
+
 ## [2.0.1] - 2026-09-20
 
 ### Documentation

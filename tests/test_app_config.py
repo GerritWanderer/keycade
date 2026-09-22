@@ -327,22 +327,58 @@ class BoundsTests(unittest.TestCase):
         self.assertNotIn("leader", found["options"])
         self.assertTrue(found["skipped"])
 
-    def test_a_symlinked_file_is_not_followed(self):
-        # The list of files is the contract; a link would let it point anywhere.
+    def test_a_symlinked_file_is_followed_when_it_is_ours(self):
+        # Keeping the real file in a dotfiles repository and linking it into
+        # place is how many machines are set up; refusing that read the whole
+        # configuration as absent, which is indistinguishable from unconfigured.
         target = self.home.path / "elsewhere.lua"
         target.write_text('vim.g.mapleader = ","', encoding="utf-8")
         link = self.home.path / ".config/nvim/lua/config/options.lua"
         link.parent.mkdir(parents=True, exist_ok=True)
         os.symlink(target, link)
-        self.assertNotIn("leader", self.home.snapshot("lazyvim")["options"])
+        self.assertEqual(self.home.snapshot("lazyvim")["options"]["leader"], ",")
 
-    def test_a_symlinked_parent_directory_is_not_followed(self):
+    def test_a_symlinked_parent_directory_is_followed_when_it_is_ours(self):
+        # ~/.config/nvim -> ~/dotfiles/nvim is the common shape of the above.
         outside = self.home.path / "outside"
         outside.mkdir()
         (outside / "options.lua").write_text('vim.g.mapleader = ","', encoding="utf-8")
         config = self.home.path / ".config/nvim/lua/config"
         config.parent.mkdir(parents=True)
         os.symlink(outside, config)
+        self.assertEqual(self.home.snapshot("lazyvim")["options"]["leader"], ",")
+
+    def test_a_world_writable_component_is_refused_though_it_is_ours(self):
+        # Owning the directory is not enough when anyone may swap what is in
+        # it: the link we vetted need not be the link we then read through.
+        outside = self.home.path / "outside"
+        outside.mkdir()
+        (outside / "options.lua").write_text('vim.g.mapleader = ","', encoding="utf-8")
+        config = self.home.path / ".config/nvim/lua/config"
+        config.parent.mkdir(parents=True)
+        os.symlink(outside, config)
+        outside.chmod(0o777)
+        self.addCleanup(outside.chmod, 0o755)
+        self.assertNotIn("leader", self.home.snapshot("lazyvim")["options"])
+
+    def test_a_world_writable_target_file_is_refused(self):
+        self.home.write(".config/nvim/lua/config/options.lua",
+                        'vim.g.mapleader = ","')
+        target = self.home.path / ".config/nvim/lua/config/options.lua"
+        target.chmod(0o666)
+        self.assertNotIn("leader", self.home.snapshot("lazyvim")["options"])
+
+    def test_a_group_writable_target_file_is_refused(self):
+        self.home.write(".config/nvim/lua/config/options.lua",
+                        'vim.g.mapleader = ","')
+        target = self.home.path / ".config/nvim/lua/config/options.lua"
+        target.chmod(0o664)
+        self.assertNotIn("leader", self.home.snapshot("lazyvim")["options"])
+
+    def test_a_symlink_loop_is_reported_rather_than_followed(self):
+        config = self.home.path / ".config/nvim/lua/config"
+        config.parent.mkdir(parents=True)
+        os.symlink(config, config)
         self.assertNotIn("leader", self.home.snapshot("lazyvim")["options"])
 
     def test_a_fifo_is_refused_without_reading_it(self):

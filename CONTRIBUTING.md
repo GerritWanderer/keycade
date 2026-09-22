@@ -41,7 +41,7 @@ We are committed to providing a welcoming, inclusive, and harassment-free enviro
 All code changes interacting with external processes, files, or user environments must uphold our security invariants:
 - **R1 (No User Config Execution)**: Never execute, load, or evaluate user configuration. Use only declared bounded static parsing or read-only compositor APIs.
 - **R2 (Dual-Ended Bounds)**: Bound producer bytes, deadlines, records, and child trees; QML independently validates and rebuilds retained models.
-- **R3 (Descriptor-Relative State I/O)**: Use verified directory descriptors with `O_NOFOLLOW`, 0600 exclusive temporary files, `fsync`, and atomic rename.
+- **R3 (Descriptor-Relative State I/O)**: Use verified directory descriptors with `O_NOFOLLOW`, 0600 exclusive temporary files, `fsync`, and atomic rename. This governs state I/O. Read-only configuration reads follow a symlinked component so a dotfiles repository linked into `~/.config` still reads, vetting every hop on the descriptor it holds: owned by the caller or root, and not group/world-writable unless a sticky directory.
 - **R4 (Prototype Safety)**: Dynamic lookups use `Object.create(null)` and reject `__proto__`, `constructor`, and `prototype`.
 - **R5 (Plain Text Dynamic UI)**: Render external text through bounded `SafeText`, strip controls, and cap visual layout.
 - **R6 (Standard Packaging Only)**: Use only the official Omarchy add, update, and remove lifecycle.

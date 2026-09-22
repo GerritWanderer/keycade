@@ -17,8 +17,12 @@ What it will not do, in the words of the rule it lives under:
   and fall back to the shipped defaults when the whole read fails.
 
 So: no Lua is run, no editor is started, no socket is opened, nothing is
-fetched, no `require` chain is followed, no directory is walked and no symlink
-is followed. Every path below is written out in full; the list is the contract.
+fetched, no `require` chain is followed and no directory is walked. Every path
+below is written out in full; the list is the contract. A path component may be
+a symlink -- keeping a configuration in a dotfiles repository and linking it
+into place is how many machines are set up, and refusing that read the whole
+configuration as absent -- but every component it resolves to must be owned by
+us or by root and be writable by nobody else.
 An unreadable value is reported as skipped rather than guessed at, because a
 guessed prefix teaches every card the wrong first key while a skipped one only
 costs the reader a menu.
@@ -27,6 +31,7 @@ costs the reader a menu.
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import os
 import re
@@ -110,9 +115,27 @@ def sanitize_text(value: object, limit: int) -> str:
     return cleaned[:limit]
 
 
+def vetted(info: os.stat_result) -> bool:
+    """Whether one already-open component is ours to read.
+
+    Ours, or the system's, and writable by nobody else. Asked of a descriptor
+    we hold rather than of a pathname, so the answer cannot change between
+    being checked and being read.
+    """
+    if info.st_uid not in (os.geteuid(), 0):
+        return False
+    if not info.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+        return True
+    # A shared directory is still safe to pass through when it is sticky:
+    # /tmp and its like let anyone add an entry but only an entry's owner
+    # rename or remove it, so the component vetted here stays the component
+    # read through. A file carries no such guarantee, sticky or not.
+    return bool(stat.S_ISDIR(info.st_mode) and info.st_mode & stat.S_ISVTX)
+
+
 def read_text(home: Path, relative: str, *, strict: bool = False,
               max_bytes: int = MAX_FILE_BYTES) -> str | None:
-    """One regular file by descriptor-relative path, bounded, no symlinks.
+    """One regular file by descriptor-relative path, bounded, every hop vetted.
 
     Strict reads distinguish absence from unreadable/non-regular input. Walk
     the absolute anchor too: an XDG_CONFIG_HOME ancestor can itself be a link.
@@ -127,15 +150,19 @@ def read_text(home: Path, relative: str, *, strict: bool = False,
         return None
     directory = -1
     try:
-        # O_NOFOLLOW on only the final file is insufficient: ~/.config/nvim
-        # itself may be a link and would widen the fixed-path contract.
-        directory = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        # A dotfiles repository linked into ~/.config is ordinary, so the walk
+        # follows links and vets what it lands on rather than refusing them,
+        # which read a whole configuration as absent. R3's O_NOFOLLOW rule
+        # still governs state writes, which is where a redirected path could
+        # do harm; this path only ever reads, and only fixed shapes.
+        directory = os.open("/", os.O_RDONLY | os.O_DIRECTORY)
         for part in anchor[1:] + parts[:-1]:
-            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW,
-                            dir_fd=directory)
+            child = os.open(part, os.O_RDONLY | os.O_DIRECTORY, dir_fd=directory)
             os.close(directory)
             directory = child
-        descriptor = os.open(parts[-1], os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK,
+            if not vetted(os.fstat(directory)):
+                raise PermissionError(errno.EACCES, "untrusted component", part)
+        descriptor = os.open(parts[-1], os.O_RDONLY | os.O_NONBLOCK,
                              dir_fd=directory)
     except OSError as error:
         if directory >= 0:
@@ -145,9 +172,14 @@ def read_text(home: Path, relative: str, *, strict: bool = False,
         return None
     os.close(directory)
     try:
-        if not stat.S_ISREG(os.fstat(descriptor).st_mode):
+        info = os.fstat(descriptor)
+        if not stat.S_ISREG(info.st_mode):
             if strict:
                 raise Skipped("non-regular")
+            return None
+        if not vetted(info):
+            if strict:
+                raise Skipped("untrusted-owner")
             return None
         with os.fdopen(descriptor, "rb", closefd=False) as handle:
             raw = handle.read(max_bytes + 1)

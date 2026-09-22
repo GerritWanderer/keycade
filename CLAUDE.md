@@ -56,7 +56,7 @@ Every change touching external commands, files, or configs **MUST** adhere to:
 
 - **R1 (No User Config Execution)**: Never run `dofile()`, Lua interpreters, or shell commands on user configs. Only use static parsers or read-only `hyprctl`.
 - **R2 (Dual-Ended Bounds)**: Enforce byte/count caps on both producer (Python) and consumer (QML). QML must independently validate schemas.
-- **R3 (Descriptor-Relative State I/O)**: Use verified directory fd with `O_NOFOLLOW`. Writes must be atomic 0600. No raw pathname traversal.
+- **R3 (Descriptor-Relative State I/O)**: Use verified directory fd with `O_NOFOLLOW`. Writes must be atomic 0600. No raw pathname traversal. Scope: **state I/O**. Read-only *config* reads (`bin/app-config-json`) may resolve a symlinked component — a dotfiles repository linked into `~/.config` is ordinary — but must vet every hop on the open descriptor: owned by the caller or root, and not group/world-writable unless a sticky directory.
 - **R4 (Prototype Safety)**: Prevent JS prototype pollution. Always use `Object.create(null)` for dynamic maps. Reject `__proto__`, `constructor`, `prototype`.
 - **R5 (Plain Text Dynamic UI)**: Always use `SafeText` with `Text.PlainText`. Strip ANSI escape codes and terminal controls.
 - **R6 (Standard Packaging Only)**: No custom `install*` or `git pull` scripts. Respect Omarchy's plugin lifecycle.

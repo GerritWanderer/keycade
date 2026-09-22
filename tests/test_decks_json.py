@@ -223,22 +223,37 @@ class DeckReaderTests(unittest.TestCase):
         self.assertEqual(found["options"]["leader"], ",")
         self.assertEqual(found["deckConfig"]["status"], "invalid")
 
-    def test_file_parent_and_home_ancestor_symlinks_are_never_followed(self):
+    def test_file_parent_and_home_ancestor_symlinks_are_followed_when_ours(self):
+        # decks.json is as likely to live in a dotfiles repository as the
+        # editor's own configuration, and is read by the same vetted walk.
         target = self.home / "target.json"
         target.write_text('{"schemaVersion":1,"decks":[]}')
         self.path.symlink_to(target)
-        self.assertEqual(self.read()["status"], "invalid")
+        self.assertEqual(self.read()["status"], "valid")
         self.path.unlink()
+        # A link is followed, but a link to nothing is still nothing, and
+        # absence must stay distinct from a configuration that failed to read.
         self.path.symlink_to(self.home / "missing.json")
-        self.assertEqual(self.read()["status"], "invalid")
+        self.assertEqual(self.read()["status"], "absent")
         self.path.unlink()
         parent = self.path.parent
         parent.rmdir()
         parent.symlink_to(self.home)
-        self.assertEqual(self.read()["status"], "invalid")
+        self.assertEqual(self.read()["status"], "absent")
         alias = self.home / "alias"
         alias.symlink_to(self.home)
-        self.assertEqual(helper.read_decks(alias / "child", self.files)["status"], "invalid")
+        self.assertEqual(helper.read_decks(alias / "child", self.files)["status"], "absent")
+
+    def test_a_symlink_into_a_world_writable_directory_is_refused(self):
+        shared = self.home / "shared"
+        shared.mkdir()
+        (shared / "decks.json").write_text('{"schemaVersion":1,"decks":[]}')
+        parent = self.path.parent
+        parent.rmdir()
+        parent.symlink_to(shared)
+        shared.chmod(0o777)
+        self.addCleanup(shared.chmod, 0o755)
+        self.assertEqual(self.read()["status"], "invalid")
 
     def test_xdg_absolute_root_and_missing_xdg_do_not_read_default_file(self):
         self.write([{"id": "default", "name": "Default"}])
@@ -249,11 +264,17 @@ class DeckReaderTests(unittest.TestCase):
             self.assertEqual(self.read()["status"], "absent")
             config.write_text('{"schemaVersion":1,"decks":[{"id":"xdg","name":"XDG"}]}')
             self.assertEqual(self.read()["decks"], [{"id": "xdg", "name": "XDG"}])
-        alias = self.home / "alias"
-        alias.symlink_to(root)
-        for value in ("relative/path", str(alias), str(alias / "child"), str(root) + "/../xdg", "/tmp/bad\x01"):
+        for value in ("relative/path", str(root) + "/../xdg", "/tmp/bad\x01"):
             with self.subTest(value=value), patch.dict(os.environ, {"XDG_CONFIG_HOME": value}):
                 self.assertEqual(self.read()["status"], "invalid")
+        # The token check stands on the spelling of the path; a link within a
+        # well-formed one resolves like any other component of the walk.
+        alias = self.home / "alias"
+        alias.symlink_to(root)
+        with patch.dict(os.environ, {"XDG_CONFIG_HOME": str(alias)}):
+            self.assertEqual(self.read()["decks"], [{"id": "xdg", "name": "XDG"}])
+        with patch.dict(os.environ, {"XDG_CONFIG_HOME": str(alias / "child")}):
+            self.assertEqual(self.read()["status"], "absent")
 
     def test_aggregate_deck_output_bound(self):
         pack = json.loads((ROOT / "assets/packs/lazyvim.json").read_text())
