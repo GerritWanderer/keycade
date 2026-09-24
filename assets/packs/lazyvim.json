@@ -82,7 +82,19 @@
    ],
    "inPageOnly": 260
   },
-  "generatedAt": "2026-09-04",
+  "overlay": {
+   "path": "assets/packs/lazyvim-custom.md",
+   "checksum": "e5d1a318236143d2dd183782d3c2f33aa2ba97e442cd79e9985eb1c811b270d0",
+   "bindings": [
+    "normal/ma",
+    "normal/mA",
+    "normal/`a",
+    "normal/`A",
+    "normal/[`",
+    "normal/]`"
+   ]
+  },
+  "generatedAt": "2026-09-24",
   "generator": "tools/build_packs.py@1"
  },
  "leader": " ",
@@ -8065,6 +8077,120 @@
    "extras": [
     "lazyvim.plugins.extras.util.rest"
    ]
+  },
+  {
+   "localId": "normal/ma",
+   "context": "normal",
+   "notation": "ma",
+   "steps": [
+    {
+     "mods": 0,
+     "text": "m"
+    },
+    {
+     "mods": 0,
+     "text": "a"
+    }
+   ],
+   "category": "buffer",
+   "descKey": "packdesc_lazyvim_set_buffer_local_mark_a",
+   "desc": "Set buffer-local mark a",
+   "extras": []
+  },
+  {
+   "localId": "normal/mA",
+   "context": "normal",
+   "notation": "mA",
+   "steps": [
+    {
+     "mods": 0,
+     "text": "m"
+    },
+    {
+     "mods": 0,
+     "text": "A"
+    }
+   ],
+   "category": "find",
+   "descKey": "packdesc_lazyvim_set_a_global_cross_file_mark_a",
+   "desc": "Set a global (cross-file) mark A",
+   "extras": []
+  },
+  {
+   "localId": "normal/`a",
+   "context": "normal",
+   "notation": "`a",
+   "steps": [
+    {
+     "mods": 0,
+     "text": "`"
+    },
+    {
+     "mods": 0,
+     "text": "a"
+    }
+   ],
+   "category": "navigation",
+   "descKey": "packdesc_lazyvim_jump_to_local_mark_a",
+   "desc": "Jump to local mark a",
+   "extras": []
+  },
+  {
+   "localId": "normal/`A",
+   "context": "normal",
+   "notation": "`A",
+   "steps": [
+    {
+     "mods": 0,
+     "text": "`"
+    },
+    {
+     "mods": 0,
+     "text": "A"
+    }
+   ],
+   "category": "navigation",
+   "descKey": "packdesc_lazyvim_jump_to_global_mark_a",
+   "desc": "Jump to global mark A",
+   "extras": []
+  },
+  {
+   "localId": "normal/[`",
+   "context": "normal",
+   "notation": "[`",
+   "steps": [
+    {
+     "mods": 0,
+     "text": "["
+    },
+    {
+     "mods": 0,
+     "text": "`"
+    }
+   ],
+   "category": "navigation",
+   "descKey": "packdesc_lazyvim_previous_lowercase_mark_in_buffer",
+   "desc": "Previous lowercase mark in buffer",
+   "extras": []
+  },
+  {
+   "localId": "normal/]`",
+   "context": "normal",
+   "notation": "]`",
+   "steps": [
+    {
+     "mods": 0,
+     "text": "]"
+    },
+    {
+     "mods": 0,
+     "text": "`"
+    }
+   ],
+   "category": "navigation",
+   "descKey": "packdesc_lazyvim_next_lowercase_mark_in_buffer",
+   "desc": "Next lowercase mark in buffer",
+   "extras": []
   }
  ]
 }
