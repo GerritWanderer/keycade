@@ -1,8 +1,11 @@
+import hashlib
 import json
 import re
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -55,6 +58,188 @@ class NotationTests(unittest.TestCase):
         self.assertEqual(build_packs.parse_notation("<S-h>"), [{"mods": 0, "text": "H"}])
 
 
+def page(body: str) -> str:
+    return "# Keymaps\n\n<!-- keymaps:start -->\n\n" + body + "\n<!-- keymaps:end -->\n"
+
+
+UPSTREAM = page("""## General
+
+| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;leader&gt;ff</code> | Find Files | **n** |
+""")
+
+
+class OverlayTests(unittest.TestCase):
+    """assets/packs/lazyvim-custom.md adds keys upstream's page does not carry.
+
+    It is hand-written, so where an upstream row is dropped and counted, an
+    overlay row that would not make it into the pack stops the collect.
+    """
+
+    def read(self, text: str, strict: bool = False):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "keymaps.md"
+            path.write_text(text, encoding="utf-8")
+            return build_packs.read_keymap_table(path, strict)
+
+    def build(self, overlay: str):
+        return build_packs.build_bindings(self.read(UPSTREAM), self.read(overlay, strict=True))
+
+    def test_overlay_rows_are_added_after_upstream_rows(self):
+        bindings, dropped = self.build(page("""## Editing
+
+| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;leader&gt;cx</code> | Custom Action | **n** **x** |
+"""))
+        self.assertEqual([entry["localId"] for entry in bindings],
+                         ["normal/<leader>ff", "normal/<leader>cx"])
+        self.assertEqual(bindings[1]["category"], "code")
+        self.assertEqual(bindings[1]["extras"], [])
+        self.assertEqual(bindings[1]["steps"][0], {"option": "leader"})
+        self.assertEqual(dropped, {})
+
+    def test_the_same_page_reads_identically_either_way(self):
+        self.assertEqual(self.read(UPSTREAM), self.read(UPSTREAM, strict=True))
+
+    def test_an_overlay_extra_is_carried_as_one(self):
+        bindings, _ = self.build(page("""## Harpoon
+
+Part of [lazyvim.plugins.extras.editor.harpoon2](/extras/editor/harpoon2)
+
+| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;leader&gt;H</code> | Harpoon File | **n** |
+"""))
+        self.assertEqual(bindings[1]["extras"], ["lazyvim.plugins.extras.editor.harpoon2"])
+
+    def test_a_key_upstream_documents_is_refused_not_replaced(self):
+        with self.assertRaisesRegex(build_packs.CustomRejected, "already-documented-upstream"):
+            self.build(page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;leader&gt;ff</code> | My Find Files | **n** |
+"""))
+
+    def test_an_equivalent_answer_upstream_documents_is_refused(self):
+        upstream = page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;C-w&gt;</code> | Close Window | **n** |
+""")
+        overlay = page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;C-W&gt;</code> | Close Window Custom | **n** |
+""")
+        with self.assertRaisesRegex(build_packs.CustomRejected, "already-documented-upstream"):
+            build_packs.build_bindings(self.read(upstream), self.read(overlay, strict=True))
+
+    def test_an_upstream_secondary_mode_is_still_a_collision(self):
+        upstream = page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;leader&gt;cx</code> | Original Action | **n** **x** |
+""")
+        overlay = page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;leader&gt;cx</code> | Custom Action | **x** |
+""")
+        with self.assertRaisesRegex(build_packs.CustomRejected, "already-documented-upstream"):
+            build_packs.build_bindings(self.read(upstream), self.read(overlay, strict=True))
+
+    def test_an_upstream_extra_is_still_a_collision_without_extras(self):
+        upstream = self.read(page("""Part of [lazyvim.plugins.extras.editor.harpoon2]
+| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;leader&gt;H</code> | Harpoon File | **n** |
+"""))
+        overlay = self.read(page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;leader&gt;H</code> | My Harpoon File | **n** |
+"""), strict=True)
+        with self.assertRaisesRegex(build_packs.CustomRejected, "already-documented-upstream"):
+            build_packs.build_bindings([], overlay, upstream)
+
+    def test_a_key_the_overlay_repeats_is_refused(self):
+        with self.assertRaisesRegex(build_packs.CustomRejected, "duplicate-overlay-row"):
+            self.build(page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;leader&gt;cx</code> | Custom Action | **n** |
+| <code>&lt;leader&gt;cx</code> | Custom Action Again | **n** |
+"""))
+
+    def test_equivalent_overlay_answers_are_refused_as_duplicates(self):
+        overlay = page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;C-w&gt;</code> | First Action | **n** |
+| <code>&lt;C-W&gt;</code> | Second Action | **n** |
+""")
+        with self.assertRaisesRegex(build_packs.CustomRejected, "duplicate-overlay-row"):
+            self.build(overlay)
+
+    def test_a_row_the_filters_would_drop_is_refused(self):
+        for row, reason in [
+            ("<code>j</code> | Down | **n**", "well-known"),
+            ("<code>&lt;leader&gt;cx</code> | Custom | **t**", "untrained-mode"),
+            ("<code>&lt;leader&gt;cx</code> | +group | **n**", "missing-description"),
+            ("<code>&lt;Home&gt;x</code> | Custom | **n**", "device-special-key"),
+        ]:
+            with self.subTest(reason=reason):
+                with self.assertRaisesRegex(build_packs.CustomRejected, reason):
+                    self.build(page("| Key | Description | Mode |\n| --- | --- | --- |\n| "
+                                    + row + " |\n"))
+
+    def test_a_malformed_overlay_row_is_refused_not_skipped(self):
+        malformed_pages = [
+            page("""| Key | Description | Mode |
+| --- | --- | --- |
+| `<leader>cx` | Custom Action | **n** |
+"""),
+            page("""| `<leader>cx` | Custom Action | **n** |
+| --- | --- | --- |
+"""),
+            page("""| Key | Description | Mode |
+| --- | --- | --- |
+  | `<leader>cx` | Custom Action | **n** |
+"""),
+            page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;leader&gt;cx</code> | Custom | Action | **n** |
+"""),
+        ]
+        for malformed in malformed_pages:
+            with self.subTest(page=malformed):
+                with self.assertRaisesRegex(build_packs.CustomRejected, "unreadable table row"):
+                    self.read(malformed, strict=True)
+
+    def test_overlay_extras_require_the_extras_flag(self):
+        with tempfile.TemporaryDirectory() as directory:
+            overlay = Path(directory) / "lazyvim-custom.md"
+            overlay.write_text("custom", encoding="utf-8")
+            with (patch.object(build_packs, "read_doc_table", return_value=[]),
+                  patch.object(build_packs, "read_keymap_table", return_value=[{
+                      "lhs": "<leader>H", "desc": "Harpoon File", "modes": ["n"],
+                      "section": "Harpoon", "extra": "lazyvim.plugins.extras.editor.harpoon2",
+                  }])):
+                with self.assertRaisesRegex(build_packs.CustomRejected, "--extras"):
+                    build_packs.collect_lazyvim(Path("site"), Path("lazyvim"), " ", "\\",
+                                                custom=overlay)
+
+    def test_the_overlay_is_optional(self):
+        bindings, _ = build_packs.build_bindings(self.read(UPSTREAM))
+        self.assertEqual([entry["localId"] for entry in bindings], ["normal/<leader>ff"])
+
+    def test_a_shipped_overlay_is_valid_and_listed_in_provenance(self):
+        if not build_packs.CUSTOM.exists():
+            self.skipTest("no overlay shipped")
+        rows = build_packs.read_keymap_table(build_packs.CUSTOM, strict=True)
+        overlay = json.loads((ROOT / "assets/packs/lazyvim.json").read_text(encoding="utf-8"))[
+            "provenance"].get("overlay")
+        self.assertIsNotNone(overlay, "the overlay exists but the pack was not collected with it")
+        self.assertEqual(len(overlay["bindings"]), len(rows))
+        self.assertEqual(overlay["checksum"], hashlib.sha256(
+            build_packs.CUSTOM.read_bytes()).hexdigest(),
+            "the overlay changed since the pack was collected; re-run --collect")
+
+
 class PackTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -103,7 +288,10 @@ class PackTests(unittest.TestCase):
     def test_the_core_of_a_pack_is_what_a_bare_install_has(self):
         # 203 was the whole table before the bundles came in; it has to stay
         # exactly what a machine with none of them enabled is dealt.
-        core = [e for e in self.packs["lazyvim"]["bindings"] if not e["extras"]]
+        # The overlay's own keys are this project's additions, not upstream's.
+        pack = self.packs["lazyvim"]
+        overlay = set(pack["provenance"].get("overlay", {}).get("bindings", []))
+        core = [e for e in pack["bindings"] if not e["extras"] and e["localId"] not in overlay]
         self.assertEqual(len(core), 203)
 
     def test_every_pack_declares_its_own_categories(self):

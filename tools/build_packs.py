@@ -40,6 +40,16 @@ Where the LazyVim table comes from, and why:
   Sections carrying a "Part of [...]" line are extras: opt-in plugins a user
   must enable. They are collected with their provider names, then filtered by
   the runtime loader against this machine's enabled extras.
+
+  assets/packs/lazyvim-custom.md, when it exists, is this project's overlay:
+  keys worth training that the upstream page does not document, written in
+  the same page format. --collect merges it after the upstream rows. It only
+  adds - a key upstream already documents, a duplicate, a row the table
+  reader cannot read or one the filters would drop stops the collect instead
+  of being skipped - and its keys are listed in provenance.overlay. Adding an
+  overlay key still means a full collect, so check the two upstream
+  checkouts out at the commits provenance records unless you also mean to
+  take upstream's changes.
 """
 
 from __future__ import annotations
@@ -56,6 +66,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PACKS = ROOT / "assets" / "packs"
 TARGET = ROOT / "lib" / "Packs.js"
+# Optional. Same page format as upstream's keymaps.md; see the module docstring.
+CUSTOM = PACKS / "lazyvim-custom.md"
 
 GENERATOR_VERSION = "1"
 
@@ -343,20 +355,38 @@ def category_from_description(desc: str) -> str:
     return "misc"
 
 
-def read_doc_table(site: Path) -> list[dict]:
-    """The generated keymaps page, with each row told where it comes from.
+class CustomRejected(Exception):
+    """A hand-written overlay row the pack would not carry.
+
+    Upstream rows are dropped and counted: nobody here wrote them, and the
+    count is the review material. An overlay row was written for this pack on
+    purpose, so losing it quietly would only look like a key that vanished.
+    """
+
+
+ROW = re.compile(r"^\| <code>(.*?)</code> \| (.*?) \| (.*?) \|$")
+TABLE_HEADER = re.compile(r"^\|\s*Key\s*\|\s*Description\s*\|\s*Mode\s*\|$")
+TABLE_RULE = re.compile(r"^\|(\s*:?-+:?\s*\|)+$")
+
+
+def read_keymap_table(path: Path, strict: bool = False) -> list[dict]:
+    """A keymaps page, with each row told where it comes from.
 
     A section carrying a "Part of [...]" line belongs to an extra: an opt-in
     bundle LazyVim ships but does not enable. Its keys are real on a machine
     that turned it on and absent on one that did not, so they are collected
     with the module name that provides them rather than dropped.
+
+    Strict is for the hand-written overlay: every table line has to be a
+    header, a rule or a row the pattern reads, because a typo there would
+    otherwise make a binding disappear without a word.
     """
-    text = (site / "docs" / "keymaps.md").read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8")
     start = text.index("<!-- keymaps:start -->")
-    block = text[start : text.index("<!-- keymaps:end -->")]
+    lines = text[start : text.index("<!-- keymaps:end -->")].splitlines()
     rows: list[dict] = []
     section, extra = "", ""
-    for line in block.splitlines():
+    for line in lines:
         if line.startswith("## "):
             section, extra = line[3:].strip(), ""
             continue
@@ -364,9 +394,14 @@ def read_doc_table(site: Path) -> list[dict]:
         if match:
             extra = match.group(1)
             continue
-        match = re.match(r"^\| <code>(.*?)</code> \| (.*?) \| (.*?) \|$", line)
+        match = ROW.match(line)
         if not match:
+            if strict and line.lstrip().startswith("|") and not TABLE_RULE.match(line) \
+                    and not TABLE_HEADER.match(line):
+                raise CustomRejected(f"{path.name}: unreadable table row: {line!r}")
             continue
+        if strict and "|" in match.group(3):
+            raise CustomRejected(f"{path.name}: unreadable table row: {line!r}")
         rows.append({
             "lhs": html.unescape(match.group(1)).replace("&vert;", "|"),
             "desc": match.group(2).strip(),
@@ -375,6 +410,11 @@ def read_doc_table(site: Path) -> list[dict]:
             "extra": extra,
         })
     return rows
+
+
+def read_doc_table(site: Path) -> list[dict]:
+    """The generated keymaps page in a LazyVim.github.io checkout."""
+    return read_keymap_table(site / "docs" / "keymaps.md")
 
 
 def read_repo_keys(lazyvim: Path) -> set[str]:
@@ -416,22 +456,42 @@ def git_head(path: Path) -> dict:
     return {"commit": run("rev-parse", "HEAD"), "date": run("log", "-1", "--format=%cs")}
 
 
-def collect_lazyvim(site: Path, lazyvim: Path, leader: str, localleader: str,
-                    with_extras: bool = False) -> dict:
-    rows = read_doc_table(site)
-    if not with_extras:
-        rows = [row for row in rows if not row["extra"]]
-    repo_keys = read_repo_keys(lazyvim)
+def build_bindings(rows: list[dict], custom_rows: list[dict] | None = None,
+                   all_upstream_rows: list[dict] | None = None) -> tuple[list[dict], dict]:
+    """Pack entries from upstream rows, then from the overlay's.
 
+    The overlay only adds: a key upstream already documents is refused rather
+    than replaced, so a key upstream picks up later fails the next collect and
+    the overlay row is retired instead of silently shadowing the real one.
+    """
     bindings: list[dict] = []
     dropped: dict[str, int] = {}
     seen: dict[str, dict] = {}
+    upstream_answers: set[tuple[str, str]] = set()
+    overlay_answers: set[tuple[str, str]] = set()
 
-    def drop(reason: str) -> None:
-        dropped[reason] = dropped.get(reason, 0) + 1
+    # Include answers from upstream extras even when this collect omits extras.
+    for row in all_upstream_rows if all_upstream_rows is not None else rows:
+        modes = [mode for mode in row["modes"] if mode in TRAINED_MODES]
+        if not modes:
+            continue
+        resolved = row["lhs"].replace("<leader>", LEADER_MARK).replace(
+            "<localleader>", LOCALLEADER_MARK)
+        try:
+            steps = parse_notation(resolved)
+        except Rejected:
+            continue
+        for mode in modes:
+            upstream_answers.add((TRAINED_MODES[mode], json.dumps(steps, sort_keys=True)))
 
-    for row in rows:
+    for custom, row in [(False, row) for row in rows] + [(True, row) for row in custom_rows or []]:
         lhs = row["lhs"]
+
+        def drop(reason: str) -> None:
+            if custom:
+                raise CustomRejected(f"overlay row {lhs!r} ({row['desc']!r}): {reason}")
+            dropped[reason] = dropped.get(reason, 0) + 1
+
         if lhs in WELL_KNOWN:
             drop("well-known")
             continue
@@ -459,12 +519,18 @@ def collect_lazyvim(site: Path, lazyvim: Path, leader: str, localleader: str,
             continue
         context = TRAINED_MODES[modes[0]]
         local_id = context + "/" + lhs
+        answer = (context, json.dumps(steps, sort_keys=True))
+        if custom and (answer in upstream_answers or answer in overlay_answers):
+            drop("already-documented-upstream" if answer in upstream_answers
+                 else "duplicate-overlay-row")
         desc = DESCRIPTION_OVERRIDES["lazyvim"].get(local_id, row["desc"])
         category = category_for(lhs, row["section"])
         if category == "misc":
             category = category_from_description(desc)
         existing = seen.get(local_id)
         if existing is not None:
+            if custom:
+                drop("duplicate-overlay-row")
             # The same key can be provided by the core and by an extra that
             # replaces it - Telescope's <leader>ff for Snacks', say. It is one
             # key either way, so it stays one entry and one row of progress,
@@ -492,7 +558,26 @@ def collect_lazyvim(site: Path, lazyvim: Path, leader: str, localleader: str,
             "extras": [row["extra"]] if row["extra"] else [],
         }
         seen[local_id] = entry
+        if not custom:
+            upstream_answers.add(answer)
+        else:
+            overlay_answers.add(answer)
         bindings.append(entry)
+    return bindings, dropped
+
+
+def collect_lazyvim(site: Path, lazyvim: Path, leader: str, localleader: str,
+                    with_extras: bool = False, custom: Path | None = None) -> dict:
+    all_rows = read_doc_table(site)
+    custom_rows = read_keymap_table(custom, strict=True) if custom and custom.exists() else []
+    if not with_extras and any(row["extra"] for row in custom_rows):
+        raise CustomRejected("overlay contains extra keys; re-run with --extras")
+    rows = all_rows if with_extras else [row for row in all_rows if not row["extra"]]
+    repo_keys = read_repo_keys(lazyvim)
+    bindings, dropped = build_bindings(rows, custom_rows, all_rows)
+    # Every overlay row either became an entry or stopped the collect, and
+    # they come last.
+    custom_ids = [entry["localId"] for entry in bindings[len(bindings) - len(custom_rows):]]
 
     doc_keys = {row["lhs"] for row in rows}
     return {
@@ -530,6 +615,13 @@ def collect_lazyvim(site: Path, lazyvim: Path, leader: str, localleader: str,
                     and (k.startswith("<leader>") or k.startswith("<C-"))),
                 "inPageOnly": len(doc_keys - repo_keys),
             },
+            **({"overlay": {
+                # Keys this project documents that upstream's page does not.
+                # Named here so a reviewer can tell them from upstream's own.
+                "path": str(custom.relative_to(ROOT)) if custom.is_relative_to(ROOT) else custom.name,
+                "checksum": hashlib.sha256(custom.read_bytes()).hexdigest(),
+                "bindings": custom_ids,
+            }} if custom_rows else {}),
             "generatedAt": date.today().isoformat(),
             "generator": f"tools/build_packs.py@{GENERATOR_VERSION}",
         },
@@ -590,8 +682,11 @@ def main() -> None:
     if args.collect:
         if not args.site or not args.lazyvim:
             parser.error("--collect lazyvim needs --site and --lazyvim")
-        pack = collect_lazyvim(args.site, args.lazyvim, args.leader, args.localleader,
-                               args.extras)
+        try:
+            pack = collect_lazyvim(args.site, args.lazyvim, args.leader, args.localleader,
+                                   args.extras, CUSTOM)
+        except CustomRejected as error:
+            parser.exit(1, f"build_packs: {error}\n")
 
     if args.collect:
         path = PACKS / f"{args.collect}.json"
