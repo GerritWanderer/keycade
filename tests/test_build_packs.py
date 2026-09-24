@@ -133,6 +133,18 @@ Part of [lazyvim.plugins.extras.editor.harpoon2](/extras/editor/harpoon2)
         with self.assertRaisesRegex(build_packs.CustomRejected, "already-documented-upstream"):
             build_packs.build_bindings(self.read(upstream), self.read(overlay, strict=True))
 
+    def test_an_upstream_secondary_mode_is_still_a_collision(self):
+        upstream = page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;leader&gt;cx</code> | Original Action | **n** **x** |
+""")
+        overlay = page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;leader&gt;cx</code> | Custom Action | **x** |
+""")
+        with self.assertRaisesRegex(build_packs.CustomRejected, "already-documented-upstream"):
+            build_packs.build_bindings(self.read(upstream), self.read(overlay, strict=True))
+
     def test_an_upstream_extra_is_still_a_collision_without_extras(self):
         upstream = self.read(page("""Part of [lazyvim.plugins.extras.editor.harpoon2]
 | Key | Description | Mode |
@@ -187,6 +199,10 @@ Part of [lazyvim.plugins.extras.editor.harpoon2](/extras/editor/harpoon2)
             page("""| Key | Description | Mode |
 | --- | --- | --- |
   | `<leader>cx` | Custom Action | **n** |
+"""),
+            page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;leader&gt;cx</code> | Custom | Action | **n** |
 """),
         ]
         for malformed in malformed_pages:

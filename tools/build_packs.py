@@ -400,6 +400,8 @@ def read_keymap_table(path: Path, strict: bool = False) -> list[dict]:
                     and not TABLE_HEADER.match(line):
                 raise CustomRejected(f"{path.name}: unreadable table row: {line!r}")
             continue
+        if strict and "|" in match.group(3):
+            raise CustomRejected(f"{path.name}: unreadable table row: {line!r}")
         rows.append({
             "lhs": html.unescape(match.group(1)).replace("&vert;", "|"),
             "desc": match.group(2).strip(),
@@ -479,8 +481,8 @@ def build_bindings(rows: list[dict], custom_rows: list[dict] | None = None,
             steps = parse_notation(resolved)
         except Rejected:
             continue
-        context = TRAINED_MODES[modes[0]]
-        upstream_answers.add((context, json.dumps(steps, sort_keys=True)))
+        for mode in modes:
+            upstream_answers.add((TRAINED_MODES[mode], json.dumps(steps, sort_keys=True)))
 
     for custom, row in [(False, row) for row in rows] + [(True, row) for row in custom_rows or []]:
         lhs = row["lhs"]
