@@ -365,6 +365,7 @@ class CustomRejected(Exception):
 
 
 ROW = re.compile(r"^\| <code>(.*?)</code> \| (.*?) \| (.*?) \|$")
+TABLE_HEADER = re.compile(r"^\|\s*Key\s*\|\s*Description\s*\|\s*Mode\s*\|$")
 TABLE_RULE = re.compile(r"^\|(\s*:?-+:?\s*\|)+$")
 
 
@@ -385,7 +386,7 @@ def read_keymap_table(path: Path, strict: bool = False) -> list[dict]:
     lines = text[start : text.index("<!-- keymaps:end -->")].splitlines()
     rows: list[dict] = []
     section, extra = "", ""
-    for index, line in enumerate(lines):
+    for line in lines:
         if line.startswith("## "):
             section, extra = line[3:].strip(), ""
             continue
@@ -395,8 +396,8 @@ def read_keymap_table(path: Path, strict: bool = False) -> list[dict]:
             continue
         match = ROW.match(line)
         if not match:
-            if strict and line.startswith("|") and not TABLE_RULE.match(line) \
-                    and not (index + 1 < len(lines) and TABLE_RULE.match(lines[index + 1])):
+            if strict and line.lstrip().startswith("|") and not TABLE_RULE.match(line) \
+                    and not TABLE_HEADER.match(line):
                 raise CustomRejected(f"{path.name}: unreadable table row: {line!r}")
             continue
         rows.append({
@@ -453,7 +454,8 @@ def git_head(path: Path) -> dict:
     return {"commit": run("rev-parse", "HEAD"), "date": run("log", "-1", "--format=%cs")}
 
 
-def build_bindings(rows: list[dict], custom_rows: list[dict] | None = None) -> tuple[list[dict], dict]:
+def build_bindings(rows: list[dict], custom_rows: list[dict] | None = None,
+                   all_upstream_rows: list[dict] | None = None) -> tuple[list[dict], dict]:
     """Pack entries from upstream rows, then from the overlay's.
 
     The overlay only adds: a key upstream already documents is refused rather
@@ -463,7 +465,22 @@ def build_bindings(rows: list[dict], custom_rows: list[dict] | None = None) -> t
     bindings: list[dict] = []
     dropped: dict[str, int] = {}
     seen: dict[str, dict] = {}
-    upstream_ids: set[str] = set()
+    upstream_answers: set[tuple[str, str]] = set()
+    overlay_answers: set[tuple[str, str]] = set()
+
+    # Include answers from upstream extras even when this collect omits extras.
+    for row in all_upstream_rows if all_upstream_rows is not None else rows:
+        modes = [mode for mode in row["modes"] if mode in TRAINED_MODES]
+        if not modes:
+            continue
+        resolved = row["lhs"].replace("<leader>", LEADER_MARK).replace(
+            "<localleader>", LOCALLEADER_MARK)
+        try:
+            steps = parse_notation(resolved)
+        except Rejected:
+            continue
+        context = TRAINED_MODES[modes[0]]
+        upstream_answers.add((context, json.dumps(steps, sort_keys=True)))
 
     for custom, row in [(False, row) for row in rows] + [(True, row) for row in custom_rows or []]:
         lhs = row["lhs"]
@@ -500,8 +517,10 @@ def build_bindings(rows: list[dict], custom_rows: list[dict] | None = None) -> t
             continue
         context = TRAINED_MODES[modes[0]]
         local_id = context + "/" + lhs
-        if custom and local_id in upstream_ids:
-            drop("already-documented-upstream")
+        answer = (context, json.dumps(steps, sort_keys=True))
+        if custom and (answer in upstream_answers or answer in overlay_answers):
+            drop("already-documented-upstream" if answer in upstream_answers
+                 else "duplicate-overlay-row")
         desc = DESCRIPTION_OVERRIDES["lazyvim"].get(local_id, row["desc"])
         category = category_for(lhs, row["section"])
         if category == "misc":
@@ -538,20 +557,22 @@ def build_bindings(rows: list[dict], custom_rows: list[dict] | None = None) -> t
         }
         seen[local_id] = entry
         if not custom:
-            upstream_ids.add(local_id)
+            upstream_answers.add(answer)
+        else:
+            overlay_answers.add(answer)
         bindings.append(entry)
     return bindings, dropped
 
 
 def collect_lazyvim(site: Path, lazyvim: Path, leader: str, localleader: str,
                     with_extras: bool = False, custom: Path | None = None) -> dict:
-    rows = read_doc_table(site)
+    all_rows = read_doc_table(site)
     custom_rows = read_keymap_table(custom, strict=True) if custom and custom.exists() else []
-    if not with_extras:
-        rows = [row for row in rows if not row["extra"]]
-        custom_rows = [row for row in custom_rows if not row["extra"]]
+    if not with_extras and any(row["extra"] for row in custom_rows):
+        raise CustomRejected("overlay contains extra keys; re-run with --extras")
+    rows = all_rows if with_extras else [row for row in all_rows if not row["extra"]]
     repo_keys = read_repo_keys(lazyvim)
-    bindings, dropped = build_bindings(rows, custom_rows)
+    bindings, dropped = build_bindings(rows, custom_rows, all_rows)
     # Every overlay row either became an entry or stopped the collect, and
     # they come last.
     custom_ids = [entry["localId"] for entry in bindings[len(bindings) - len(custom_rows):]]

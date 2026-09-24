@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -120,6 +121,31 @@ Part of [lazyvim.plugins.extras.editor.harpoon2](/extras/editor/harpoon2)
 | <code>&lt;leader&gt;ff</code> | My Find Files | **n** |
 """))
 
+    def test_an_equivalent_answer_upstream_documents_is_refused(self):
+        upstream = page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;C-w&gt;</code> | Close Window | **n** |
+""")
+        overlay = page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;C-W&gt;</code> | Close Window Custom | **n** |
+""")
+        with self.assertRaisesRegex(build_packs.CustomRejected, "already-documented-upstream"):
+            build_packs.build_bindings(self.read(upstream), self.read(overlay, strict=True))
+
+    def test_an_upstream_extra_is_still_a_collision_without_extras(self):
+        upstream = self.read(page("""Part of [lazyvim.plugins.extras.editor.harpoon2]
+| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;leader&gt;H</code> | Harpoon File | **n** |
+"""))
+        overlay = self.read(page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;leader&gt;H</code> | My Harpoon File | **n** |
+"""), strict=True)
+        with self.assertRaisesRegex(build_packs.CustomRejected, "already-documented-upstream"):
+            build_packs.build_bindings([], overlay, upstream)
+
     def test_a_key_the_overlay_repeats_is_refused(self):
         with self.assertRaisesRegex(build_packs.CustomRejected, "duplicate-overlay-row"):
             self.build(page("""| Key | Description | Mode |
@@ -127,6 +153,15 @@ Part of [lazyvim.plugins.extras.editor.harpoon2](/extras/editor/harpoon2)
 | <code>&lt;leader&gt;cx</code> | Custom Action | **n** |
 | <code>&lt;leader&gt;cx</code> | Custom Action Again | **n** |
 """))
+
+    def test_equivalent_overlay_answers_are_refused_as_duplicates(self):
+        overlay = page("""| Key | Description | Mode |
+| --- | --- | --- |
+| <code>&lt;C-w&gt;</code> | First Action | **n** |
+| <code>&lt;C-W&gt;</code> | Second Action | **n** |
+""")
+        with self.assertRaisesRegex(build_packs.CustomRejected, "duplicate-overlay-row"):
+            self.build(overlay)
 
     def test_a_row_the_filters_would_drop_is_refused(self):
         for row, reason in [
@@ -141,13 +176,36 @@ Part of [lazyvim.plugins.extras.editor.harpoon2](/extras/editor/harpoon2)
                                     + row + " |\n"))
 
     def test_a_malformed_overlay_row_is_refused_not_skipped(self):
-        malformed = page("""| Key | Description | Mode |
+        malformed_pages = [
+            page("""| Key | Description | Mode |
 | --- | --- | --- |
 | `<leader>cx` | Custom Action | **n** |
-""")
-        self.assertEqual(self.read(malformed), [])
-        with self.assertRaisesRegex(build_packs.CustomRejected, "unreadable table row"):
-            self.read(malformed, strict=True)
+"""),
+            page("""| `<leader>cx` | Custom Action | **n** |
+| --- | --- | --- |
+"""),
+            page("""| Key | Description | Mode |
+| --- | --- | --- |
+  | `<leader>cx` | Custom Action | **n** |
+"""),
+        ]
+        for malformed in malformed_pages:
+            with self.subTest(page=malformed):
+                with self.assertRaisesRegex(build_packs.CustomRejected, "unreadable table row"):
+                    self.read(malformed, strict=True)
+
+    def test_overlay_extras_require_the_extras_flag(self):
+        with tempfile.TemporaryDirectory() as directory:
+            overlay = Path(directory) / "lazyvim-custom.md"
+            overlay.write_text("custom", encoding="utf-8")
+            with (patch.object(build_packs, "read_doc_table", return_value=[]),
+                  patch.object(build_packs, "read_keymap_table", return_value=[{
+                      "lhs": "<leader>H", "desc": "Harpoon File", "modes": ["n"],
+                      "section": "Harpoon", "extra": "lazyvim.plugins.extras.editor.harpoon2",
+                  }])):
+                with self.assertRaisesRegex(build_packs.CustomRejected, "--extras"):
+                    build_packs.collect_lazyvim(Path("site"), Path("lazyvim"), " ", "\\",
+                                                custom=overlay)
 
     def test_the_overlay_is_optional(self):
         bindings, _ = build_packs.build_bindings(self.read(UPSTREAM))
