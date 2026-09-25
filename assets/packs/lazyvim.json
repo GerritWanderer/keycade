@@ -84,17 +84,18 @@
   },
   "overlay": {
    "path": "assets/packs/lazyvim-custom.md",
-   "checksum": "e5d1a318236143d2dd183782d3c2f33aa2ba97e442cd79e9985eb1c811b270d0",
+   "checksum": "869817fa92af441b152a4e4e347c976118ed0fd1be002fdf3ca23ceb915ffb13",
    "bindings": [
     "normal/ma",
     "normal/mA",
+    "normal/m-",
     "normal/`a",
     "normal/`A",
     "normal/[`",
     "normal/]`"
    ]
   },
-  "generatedAt": "2026-09-24",
+  "generatedAt": "2026-09-25",
   "generator": "tools/build_packs.py@1"
  },
  "leader": " ",
@@ -8114,6 +8115,25 @@
    "category": "find",
    "descKey": "packdesc_lazyvim_set_a_global_cross_file_mark_a",
    "desc": "Set a global (cross-file) mark A",
+   "extras": []
+  },
+  {
+   "localId": "normal/m-",
+   "context": "normal",
+   "notation": "m-",
+   "steps": [
+    {
+     "mods": 0,
+     "text": "m"
+    },
+    {
+     "mods": 0,
+     "text": "-"
+    }
+   ],
+   "category": "misc",
+   "descKey": "packdesc_lazyvim_delete_mark_on_current_line",
+   "desc": "Delete mark on current line",
    "extras": []
   },
   {

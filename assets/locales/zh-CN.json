@@ -162,6 +162,7 @@
   "packdesc_lazyvim_delete_buffers_to_the_left": "关闭左侧所有缓冲区",
   "packdesc_lazyvim_delete_buffers_to_the_right": "关闭右侧所有缓冲区",
   "packdesc_lazyvim_delete_invisible_buffers": "关闭未显示的缓冲区",
+  "packdesc_lazyvim_delete_mark_on_current_line": "删除当前行的标记",
   "packdesc_lazyvim_delete_non_pinned_buffers": "关闭未固定的缓冲区",
   "packdesc_lazyvim_delete_other_buffers": "关闭其他缓冲区",
   "packdesc_lazyvim_delete_surrounding": "删除包围符",
