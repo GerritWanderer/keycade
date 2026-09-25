@@ -162,6 +162,7 @@
   "packdesc_lazyvim_delete_buffers_to_the_left": "Delete Buffers to the Left",
   "packdesc_lazyvim_delete_buffers_to_the_right": "Delete Buffers to the Right",
   "packdesc_lazyvim_delete_invisible_buffers": "Delete Invisible Buffers",
+  "packdesc_lazyvim_delete_mark_on_current_line": "Delete mark on current line",
   "packdesc_lazyvim_delete_non_pinned_buffers": "Delete Non-Pinned Buffers",
   "packdesc_lazyvim_delete_other_buffers": "Delete Other Buffers",
   "packdesc_lazyvim_delete_surrounding": "Delete Surrounding",
